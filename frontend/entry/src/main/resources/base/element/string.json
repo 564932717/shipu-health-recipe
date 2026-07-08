@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "app_name",
+      "value": "健康食谱"
+    },
+    {
+      "name": "module_desc",
+      "value": "个性化健康食谱规划系统"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "应用入口"
+    }
+  ]
+}
