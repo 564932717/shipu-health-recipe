@@ -8,9 +8,9 @@ export class MockData {
     heightCm: 175,
     weightKg: 72,
     goal: HealthGoal.FAT_LOSS,
-    chronicConditions: ['轻度高血压'],
-    taboos: ['花生', '高盐'],
-    tastePreferences: ['清淡', '高蛋白']
+    chronicConditions: [],
+    taboos: [],
+    tastePreferences: []
   };
 
   static mealPlan: MealPlan = {

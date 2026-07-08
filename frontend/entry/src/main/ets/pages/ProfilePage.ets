@@ -23,6 +23,12 @@ export struct ProfilePage {
   @State carbohydrateGram: number = MockData.mealPlan.assessment.target.carbohydrateGram;
   @State macroRatioText: string = MockData.mealPlan.assessment.target.macroRatio;
   @State adviceItems: string[] = MockData.mealPlan.assessment.advices;
+  @State portraitImageKey: string = '';
+  @State portraitBmiRangeKey: string = '';
+  @State portraitBmiCalloutText: string = '';
+  @State portraitChronicCalloutText: string = '';
+  @State portraitNutritionCalloutText: string = '';
+  @State portraitGoalCalloutText: string = '';
   @State saveMessage: string = '';
 
   aboutToAppear() {
@@ -209,30 +215,145 @@ export struct ProfilePage {
         .fontColor('#071725')
         .width('100%')
 
-      Text(this.portraitText())
-        .fontSize(14)
-        .fontColor('#FFF6D5')
-        .lineHeight(22)
-        .padding(14)
-        .backgroundColor('#071725')
-        .borderRadius(14)
-        .width('100%')
-
-      ForEach(this.adviceItems, (item: string) => {
-        Text(item)
-          .fontSize(13)
-          .fontColor('#405146')
-          .lineHeight(20)
-          .padding(12)
-          .backgroundColor('#F8FAF5')
-          .borderRadius(12)
+      if (this.shouldShowVisualPortrait()) {
+        this.healthPortrait()
+      } else {
+        Text(this.portraitText())
+          .fontSize(14)
+          .fontColor('#FFF6D5')
+          .lineHeight(22)
+          .padding(14)
+          .backgroundColor('#071725')
+          .borderRadius(14)
           .width('100%')
-      })
+
+        ForEach(this.adviceItems, (item: string) => {
+          Text(item)
+            .fontSize(13)
+            .fontColor('#405146')
+            .lineHeight(20)
+            .padding(12)
+            .backgroundColor('#F8FAF5')
+            .borderRadius(12)
+            .width('100%')
+        })
+      }
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
     .borderRadius(18)
     .width('100%')
+  }
+
+  @Builder
+  healthPortrait() {
+    Stack({ alignContent: Alignment.TopStart }) {
+      this.portraitBodyImage()
+
+      this.bmiPortraitCalloutBox()
+
+      this.chronicPortraitCalloutBox()
+
+      this.nutritionPortraitCalloutBox()
+
+      this.goalPortraitCalloutBox()
+    }
+    .width('100%')
+    .height(520)
+    .backgroundColor('#FFFDF8')
+    .border({ width: 1, color: '#F0E4D8' })
+    .borderRadius(16)
+    .clip(true)
+  }
+
+  @Builder
+  portraitBodyImage() {
+    if (this.portraitImageKey === 'male_bmi_0_18') {
+      this.portraitImage($r('app.media.male_bmi_0_18'))
+    } else if (this.portraitImageKey === 'male_bmi_18_22') {
+      this.portraitImage($r('app.media.male_bmi_18_22'))
+    } else if (this.portraitImageKey === 'male_bmi_22_24') {
+      this.portraitImage($r('app.media.male_bmi_22_24'))
+    } else if (this.portraitImageKey === 'male_bmi_24_30') {
+      this.portraitImage($r('app.media.male_bmi_24_30'))
+    } else if (this.portraitImageKey === 'male_bmi_30_plus') {
+      this.portraitImage($r('app.media.male_bmi_30_plus'))
+    } else if (this.portraitImageKey === 'female_bmi_0_18') {
+      this.portraitImage($r('app.media.female_bmi_0_18'))
+    } else if (this.portraitImageKey === 'female_bmi_18_22') {
+      this.portraitImage($r('app.media.female_bmi_18_22'))
+    } else if (this.portraitImageKey === 'female_bmi_22_24') {
+      this.portraitImage($r('app.media.female_bmi_22_24'))
+    } else if (this.portraitImageKey === 'female_bmi_24_30') {
+      this.portraitImage($r('app.media.female_bmi_24_30'))
+    } else if (this.portraitImageKey === 'female_bmi_30_plus') {
+      this.portraitImage($r('app.media.female_bmi_30_plus'))
+    }
+  }
+
+  @Builder
+  portraitImage(imageResource: Resource) {
+    Image(imageResource)
+      .width(166)
+      .height(420)
+      .objectFit(ImageFit.Contain)
+      .position({ x: 99, y: 54 })
+  }
+
+  @Builder
+  bmiPortraitCalloutBox() {
+    Text(this.portraitBmiCalloutText)
+      .fontSize(12)
+      .fontColor('#7C2416')
+      .lineHeight(17)
+      .padding({ left: 8, right: 8, top: 7, bottom: 7 })
+      .backgroundColor('#FFF9F2')
+      .border({ width: 1, color: '#E25B44' })
+      .borderRadius(10)
+      .width(132)
+      .position({ x: 8, y: 58 })
+  }
+
+  @Builder
+  chronicPortraitCalloutBox() {
+    Text(this.portraitChronicCalloutText)
+      .fontSize(12)
+      .fontColor('#7C2416')
+      .lineHeight(17)
+      .padding({ left: 8, right: 8, top: 7, bottom: 7 })
+      .backgroundColor('#FFF9F2')
+      .border({ width: 1, color: '#E25B44' })
+      .borderRadius(10)
+      .width(116)
+      .position({ x: 198, y: 58 })
+  }
+
+  @Builder
+  nutritionPortraitCalloutBox() {
+    Text(this.portraitNutritionCalloutText)
+      .fontSize(12)
+      .fontColor('#7C2416')
+      .lineHeight(17)
+      .padding({ left: 8, right: 8, top: 7, bottom: 7 })
+      .backgroundColor('#FFF9F2')
+      .border({ width: 1, color: '#E25B44' })
+      .borderRadius(10)
+      .width(138)
+      .position({ x: 8, y: 346 })
+  }
+
+  @Builder
+  goalPortraitCalloutBox() {
+    Text(this.portraitGoalCalloutText)
+      .fontSize(12)
+      .fontColor('#7C2416')
+      .lineHeight(17)
+      .padding({ left: 8, right: 8, top: 7, bottom: 7 })
+      .backgroundColor('#FFF9F2')
+      .border({ width: 1, color: '#E25B44' })
+      .borderRadius(10)
+      .width(116)
+      .position({ x: 198, y: 396 })
   }
 
   @Builder
@@ -504,6 +625,7 @@ export struct ProfilePage {
     this.macroRatioText = target.macroRatio;
     this.adviceItems = advices;
     this.assessment = nextAssessment;
+    this.refreshPortraitState();
     this.persistLocalAssessment();
   }
 
@@ -633,6 +755,172 @@ export struct ProfilePage {
       return '控压目标建议控制钠摄入，增加钾、镁丰富的蔬果和全谷物。';
     }
     return '均衡目标建议稳定三餐结构，保证蛋白质、优质脂肪和复合碳水比例。';
+  }
+
+  private refreshPortraitState() {
+    const range = this.resolvePortraitBmiRange(this.bmiValue);
+    this.portraitBmiRangeKey = range;
+    this.portraitImageKey = this.resolvePortraitImageKey(this.profile.gender, range);
+    this.portraitBmiCalloutText = `BMI评估：${this.resolvePortraitBmiLabel(range)}。${this.resolveBmiPortraitAdvice(range)}`;
+    this.portraitChronicCalloutText = this.buildChronicPortraitCallout(range);
+    this.portraitNutritionCalloutText =
+      `建议摄入比例：${this.macroRatioText}。每日约蛋白质${this.proteinGram}g、脂肪${this.fatGram}g、碳水${this.carbohydrateGram}g。`;
+    this.portraitGoalCalloutText = this.buildGoalPortraitCallout(range);
+  }
+
+  private shouldShowVisualPortrait(): boolean {
+    return this.portraitImageKey.length > 0;
+  }
+
+  private resolvePortraitBmiRange(bmi: number): string {
+    if (bmi <= 0) {
+      return '';
+    }
+    if (bmi <= 18) {
+      return '0_18';
+    }
+    if (bmi < 22) {
+      return '18_22';
+    }
+    if (bmi < 24) {
+      return '22_24';
+    }
+    if (bmi < 30) {
+      return '24_30';
+    }
+    return '30_plus';
+  }
+
+  private resolvePortraitImageKey(gender: Gender, range: string): string {
+    if (range.length === 0) {
+      return '';
+    }
+    if (gender === Gender.MALE) {
+      return `male_bmi_${range}`;
+    }
+    if (gender === Gender.FEMALE) {
+      return `female_bmi_${range}`;
+    }
+    return '';
+  }
+
+  private resolvePortraitBmiLabel(range: string): string {
+    if (range === '0_18') {
+      return '偏瘦';
+    }
+    if (range === '18_22') {
+      return '正常';
+    }
+    if (range === '22_24') {
+      return '正常偏高';
+    }
+    if (range === '24_30') {
+      return '超重';
+    }
+    if (range === '30_plus') {
+      return '肥胖';
+    }
+    return '待完善';
+  }
+
+  private resolveBmiPortraitAdvice(range: string): string {
+    if (range === '0_18') {
+      return '建议稳定加餐，并配合力量训练逐步增重。';
+    }
+    if (range === '18_22') {
+      return '状态较理想，建议保持规律饮食和稳定运动。';
+    }
+    if (range === '22_24') {
+      return '接近偏高区间，建议控制甜饮、夜宵和久坐。';
+    }
+    if (range === '24_30') {
+      return '建议建立轻度热量缺口，优先减少高油高糖摄入。';
+    }
+    return '建议先关注体脂管理，循序渐进降低总热量摄入。';
+  }
+
+  private buildChronicPortraitCallout(range: string): string {
+    const chronicItems = this.splitTags(this.chronicText);
+    let suffix = '保持规律体检，留意身体状态变化。';
+    if (range === '0_18') {
+      suffix = '增重期间保持规律体检，留意血脂和血糖变化。';
+    } else if (range === '24_30' || range === '30_plus') {
+      suffix = '重点关注血压、血脂、血糖和关节负担。';
+    }
+    if (chronicItems.length === 0) {
+      return `慢病关注：暂无慢病标记。${suffix}`;
+    }
+    const keywordAdvice = this.chronicKeywordAdvice(chronicItems);
+    if (keywordAdvice.length > 0) {
+      return `慢病关注：${this.compactTags(chronicItems)}。${keywordAdvice}。`;
+    }
+    return `慢病关注：${this.compactTags(chronicItems)}。${suffix}`;
+  }
+
+  private chronicKeywordAdvice(items: string[]): string {
+    const advices: string[] = [];
+    items.forEach((item: string) => {
+      const text = item.toLowerCase();
+      if ((text.indexOf('高血压') >= 0 || text.indexOf('血压') >= 0) && advices.indexOf('少盐控钠，少吃腌制和高盐食物') < 0) {
+        advices.push('少盐控钠，少吃腌制和高盐食物');
+      } else if ((text.indexOf('糖尿病') >= 0 || text.indexOf('血糖') >= 0 || text.indexOf('控糖') >= 0) && advices.indexOf('选择低GI主食，减少甜饮和精制糖') < 0) {
+        advices.push('选择低GI主食，减少甜饮和精制糖');
+      } else if (text.indexOf('脂肪肝') >= 0 && advices.indexOf('控油控糖，避免酒精和油炸食物') < 0) {
+        advices.push('控油控糖，避免酒精和油炸食物');
+      } else if ((text.indexOf('高血脂') >= 0 || text.indexOf('血脂') >= 0 || text.indexOf('胆固醇') >= 0 || text.indexOf('甘油三酯') >= 0) && advices.indexOf('少动物油和反式脂肪，增加膳食纤维') < 0) {
+        advices.push('少动物油和反式脂肪，增加膳食纤维');
+      } else if ((text.indexOf('痛风') >= 0 || text.indexOf('尿酸') >= 0) && advices.indexOf('少酒精、内脏、浓汤和高嘌呤海鲜') < 0) {
+        advices.push('少酒精、内脏、浓汤和高嘌呤海鲜');
+      } else if ((text.indexOf('肾病') >= 0 || text.indexOf('肾功能') >= 0) && advices.indexOf('蛋白质和钠摄入需按医嘱控制') < 0) {
+        advices.push('蛋白质和钠摄入需按医嘱控制');
+      } else if ((text.indexOf('胃病') >= 0 || text.indexOf('胃炎') >= 0 || text.indexOf('胃溃疡') >= 0 || text.indexOf('反流') >= 0) && advices.indexOf('少刺激性食物，保持规律少量多餐') < 0) {
+        advices.push('少刺激性食物，保持规律少量多餐');
+      } else if (text.indexOf('贫血') >= 0 && advices.indexOf('增加铁和优质蛋白，搭配维C蔬果') < 0) {
+        advices.push('增加铁和优质蛋白，搭配维C蔬果');
+      }
+    });
+    return advices.slice(0, 2).join('；');
+  }
+
+  private buildGoalPortraitCallout(range: string): string {
+    if (this.profile.goal === HealthGoal.FAT_LOSS) {
+      if (range === '0_18') {
+        return '健身目标：减脂。当前偏瘦，不建议继续减脂，可先增肌或均衡维护。';
+      }
+      return '健身目标：减脂。建议从低冲击有氧和力量训练开始，保持轻度热量缺口。';
+    }
+    if (this.profile.goal === HealthGoal.MUSCLE_GAIN) {
+      if (range === '24_30' || range === '30_plus') {
+        return '健身目标：增肌。建议先控体脂，再用力量训练保留和提升肌肉量。';
+      }
+      return '健身目标：增肌。建议每周3-4次力量训练，并保持轻度热量盈余。';
+    }
+    if (this.profile.goal === HealthGoal.BLOOD_SUGAR_CONTROL) {
+      return '健身目标：控糖。优先选择低 GI 主食，用规律运动提升肌肉量和代谢稳定性。';
+    }
+    if (this.profile.goal === HealthGoal.BLOOD_PRESSURE_CONTROL) {
+      if (range === '0_18') {
+        return '健身目标：控压。增重时少靠高盐高油食物，搭配中低强度有氧和力量训练。';
+      }
+      return '健身目标：控压。建议低盐饮食，搭配中低强度有氧和力量训练。';
+    }
+    if (range === '0_18') {
+      return `健身目标：${this.goalLabel()}。建议以增加优质蛋白、主食和规律训练为重点。`;
+    }
+    if (range === '18_22') {
+      return `健身目标：${this.goalLabel()}。建议保持当前节奏，稳定三餐和运动频率。`;
+    }
+    if (range === '22_24') {
+      return `健身目标：${this.goalLabel()}。建议减少久坐，增加日常步行和力量训练。`;
+    }
+    return `健身目标：${this.goalLabel()}。建议控制总热量，先从低冲击运动和规律作息开始。`;
+  }
+
+  private compactTags(items: string[]): string {
+    if (items.length <= 3) {
+      return items.join('、');
+    }
+    return `${items.slice(0, 3).join('、')}等`;
   }
 
   private portraitText(): string {
