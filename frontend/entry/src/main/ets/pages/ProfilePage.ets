@@ -10,8 +10,19 @@ import { ApiClient } from '../services/ApiClient';
 
 @Component
 export struct ProfilePage {
+  @Prop activeUserId: string = '';
   @State profile: HealthProfile = MockData.profile;
   @State assessment: HealthAssessment = MockData.mealPlan.assessment;
+  @State loadedUserId: string = '';
+  @State ageText: string = '';
+  @State heightText: string = '';
+  @State weightText: string = '';
+  @State ageEditable: boolean = false;
+  @State heightEditable: boolean = false;
+  @State weightEditable: boolean = false;
+  @State selectedGender: Gender = MockData.profile.gender;
+  @State selectedGoal: HealthGoal = MockData.profile.goal;
+  @State basicApplyMessage: string = '';
   @State chronicText: string = '';
   @State tabooText: string = '';
   @State tasteText: string = '';
@@ -36,14 +47,18 @@ export struct ProfilePage {
   }
 
   async load() {
+    const userId = this.profileUserId();
     try {
-      this.profile = await ApiClient.getProfile(ApiClient.currentUserId);
+      this.profile = await ApiClient.getProfile(userId);
+      this.loadedUserId = userId;
       this.saveMessage = '';
     } catch (error) {
-      this.profile = MockData.profile;
+      this.profile = this.emptyProfile(userId);
+      this.loadedUserId = userId;
       this.saveMessage = '后端暂不可用，已使用本地档案生成评估';
     }
     this.normalizeProfile();
+    this.hydrateBasicFields();
     this.hydrateTextFields();
     this.rebuildAssessment();
   }
@@ -90,18 +105,9 @@ export struct ProfilePage {
         .fontColor('#071725')
         .width('100%')
 
-      this.numberRow('年龄', this.profile.age, '岁', (value: number) => {
-        this.profile.age = value;
-        this.rebuildAssessment();
-      })
-      this.numberRow('身高', this.profile.heightCm, 'cm', (value: number) => {
-        this.profile.heightCm = value;
-        this.rebuildAssessment();
-      })
-      this.numberRow('体重', this.profile.weightKg, 'kg', (value: number) => {
-        this.profile.weightKg = value;
-        this.rebuildAssessment();
-      })
+      this.ageNumberRow()
+      this.heightNumberRow()
+      this.weightNumberRow()
 
       Text('性别')
         .fontSize(14)
@@ -129,6 +135,25 @@ export struct ProfilePage {
         this.goalButton('控压', HealthGoal.BLOOD_PRESSURE_CONTROL)
       }
       .width('100%')
+
+      Button('应用')
+        .width('100%')
+        .height(42)
+        .fontSize(15)
+        .fontColor('#FFF6D5')
+        .backgroundColor('#156B45')
+        .borderRadius(21)
+        .onClick(async () => {
+          await this.applyBasicInfo();
+        })
+
+      if (this.basicApplyMessage.length > 0) {
+        Text(this.basicApplyMessage)
+          .fontSize(12)
+          .fontColor('#657064')
+          .lineHeight(18)
+          .width('100%')
+      }
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
@@ -382,26 +407,157 @@ export struct ProfilePage {
   }
 
   @Builder
-  numberRow(label: string, value: number, unit: string, onChange: (value: number) => void) {
-    Row({ space: 10 }) {
-      Text(label)
+  ageNumberRow() {
+    Row({ space: 8 }) {
+      Text('年龄')
         .fontSize(15)
         .fontColor('#071725')
-        .width(62)
-      TextInput({ text: `${value}` })
-        .type(InputType.Number)
-        .height(42)
-        .layoutWeight(1)
-        .backgroundColor('#F8FAF5')
-        .borderRadius(12)
-        .padding({ left: 12, right: 12 })
-        .onChange((text: string) => {
-          const parsed = Number(text);
-          if (!Number.isNaN(parsed) && parsed > 0) {
-            onChange(parsed);
-          }
-        })
-      Text(unit)
+        .width(36)
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.edit_icon'))
+          .width(22)
+          .height(22)
+          .objectFit(ImageFit.Contain)
+          .opacity(this.ageEditable ? 1 : 0.72)
+      }
+      .width(32)
+      .height(32)
+      .backgroundColor(this.ageEditable ? '#E8F2E7' : '#FFFFFF')
+      .borderRadius(8)
+      .onClick(() => {
+        this.ageEditable = true;
+        this.basicApplyMessage = '已开放年龄修改，修改后请点击应用';
+      })
+      if (this.ageEditable) {
+        TextInput({ text: this.ageText })
+          .type(InputType.Number)
+          .fontSize(15)
+          .height(42)
+          .layoutWeight(1)
+          .backgroundColor('#F8FAF5')
+          .borderRadius(12)
+          .padding({ left: 12, right: 12 })
+          .onChange((text: string) => {
+            this.ageText = text;
+          })
+      } else {
+        Text(this.ageText.length > 0 ? this.ageText : '--')
+          .fontSize(15)
+          .fontColor('#071725')
+          .height(42)
+          .layoutWeight(1)
+          .padding({ left: 12, right: 12 })
+          .backgroundColor('#F8FAF5')
+          .borderRadius(12)
+          .textAlign(TextAlign.Start)
+      }
+      Text('岁')
+        .fontSize(13)
+        .fontColor('#657064')
+        .width(34)
+    }
+    .width('100%')
+  }
+
+  @Builder
+  heightNumberRow() {
+    Row({ space: 8 }) {
+      Text('身高')
+        .fontSize(15)
+        .fontColor('#071725')
+        .width(36)
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.edit_icon'))
+          .width(22)
+          .height(22)
+          .objectFit(ImageFit.Contain)
+          .opacity(this.heightEditable ? 1 : 0.72)
+      }
+      .width(32)
+      .height(32)
+      .backgroundColor(this.heightEditable ? '#E8F2E7' : '#FFFFFF')
+      .borderRadius(8)
+      .onClick(() => {
+        this.heightEditable = true;
+        this.basicApplyMessage = '已开放身高修改，修改后请点击应用';
+      })
+      if (this.heightEditable) {
+        TextInput({ text: this.heightText })
+          .type(InputType.Number)
+          .fontSize(15)
+          .height(42)
+          .layoutWeight(1)
+          .backgroundColor('#F8FAF5')
+          .borderRadius(12)
+          .padding({ left: 12, right: 12 })
+          .onChange((text: string) => {
+            this.heightText = text;
+          })
+      } else {
+        Text(this.heightText.length > 0 ? this.heightText : '--')
+          .fontSize(15)
+          .fontColor('#071725')
+          .height(42)
+          .layoutWeight(1)
+          .padding({ left: 12, right: 12 })
+          .backgroundColor('#F8FAF5')
+          .borderRadius(12)
+          .textAlign(TextAlign.Start)
+      }
+      Text('cm')
+        .fontSize(13)
+        .fontColor('#657064')
+        .width(34)
+    }
+    .width('100%')
+  }
+
+  @Builder
+  weightNumberRow() {
+    Row({ space: 8 }) {
+      Text('体重')
+        .fontSize(15)
+        .fontColor('#071725')
+        .width(36)
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.edit_icon'))
+          .width(22)
+          .height(22)
+          .objectFit(ImageFit.Contain)
+          .opacity(this.weightEditable ? 1 : 0.72)
+      }
+      .width(32)
+      .height(32)
+      .backgroundColor(this.weightEditable ? '#E8F2E7' : '#FFFFFF')
+      .borderRadius(8)
+      .onClick(() => {
+        this.weightEditable = true;
+        this.basicApplyMessage = '已开放体重修改，修改后请点击应用';
+      })
+      if (this.weightEditable) {
+        TextInput({ text: this.weightText })
+          .type(InputType.Number)
+          .fontSize(15)
+          .height(42)
+          .layoutWeight(1)
+          .backgroundColor('#F8FAF5')
+          .borderRadius(12)
+          .padding({ left: 12, right: 12 })
+          .onChange((text: string) => {
+            this.weightText = text;
+          })
+      } else {
+        Text(this.weightText.length > 0 ? this.weightText : '--')
+          .fontSize(15)
+          .fontColor('#071725')
+          .height(42)
+          .layoutWeight(1)
+          .padding({ left: 12, right: 12 })
+          .backgroundColor('#F8FAF5')
+          .borderRadius(12)
+          .textAlign(TextAlign.Start)
+      }
+      Text('kg')
         .fontSize(13)
         .fontColor('#657064')
         .width(34)
@@ -443,13 +599,13 @@ export struct ProfilePage {
     Button(label)
       .height(36)
       .fontSize(13)
-      .fontColor(this.profile.gender === gender ? '#FFF6D5' : '#405146')
-      .backgroundColor(this.profile.gender === gender ? '#071725' : '#EEF4EA')
+      .fontColor(this.selectedGender === gender ? '#FFF6D5' : '#405146')
+      .backgroundColor(this.selectedGender === gender ? '#071725' : '#EEF4EA')
       .borderRadius(18)
       .layoutWeight(1)
       .onClick(() => {
-        this.profile.gender = gender;
-        this.rebuildAssessment();
+        this.selectedGender = gender;
+        this.basicApplyMessage = '性别已修改，点击应用后更新健康档案';
       })
   }
 
@@ -458,20 +614,20 @@ export struct ProfilePage {
     Button(label)
       .height(36)
       .fontSize(13)
-      .fontColor(this.profile.goal === goal ? '#FFF6D5' : '#405146')
-      .backgroundColor(this.profile.goal === goal ? '#071725' : '#EEF4EA')
+      .fontColor(this.selectedGoal === goal ? '#FFF6D5' : '#405146')
+      .backgroundColor(this.selectedGoal === goal ? '#071725' : '#EEF4EA')
       .borderRadius(18)
       .layoutWeight(1)
       .onClick(() => {
-        this.profile.goal = goal;
-        this.rebuildAssessment();
+        this.selectedGoal = goal;
+        this.basicApplyMessage = '健身目标已修改，点击应用后更新健康档案';
       })
   }
 
   @Builder
   bmiMetricTile() {
     Column({ space: 4 }) {
-      Text(`${this.bmiValue}`)
+      Text(this.bmiDisplayText())
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
@@ -492,7 +648,7 @@ export struct ProfilePage {
   @Builder
   calorieMetricTile() {
     Column({ space: 4 }) {
-      Text(`${this.dailyCalories}`)
+      Text(this.calorieDisplayText())
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
@@ -522,7 +678,7 @@ export struct ProfilePage {
         .layoutWeight(1)
         .backgroundColor('#A8D9A1')
         .borderRadius(5)
-      Text(`${this.proteinGram}g`)
+      Text(this.proteinDisplayText())
         .fontSize(13)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
@@ -544,7 +700,7 @@ export struct ProfilePage {
         .layoutWeight(1)
         .backgroundColor('#E7B4C8')
         .borderRadius(5)
-      Text(`${this.fatGram}g`)
+      Text(this.fatDisplayText())
         .fontSize(13)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
@@ -566,7 +722,7 @@ export struct ProfilePage {
         .layoutWeight(1)
         .backgroundColor('#93BFE8')
         .borderRadius(5)
-      Text(`${this.carbohydrateGram}g`)
+      Text(this.carbohydrateDisplayText())
         .fontSize(13)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
@@ -574,6 +730,22 @@ export struct ProfilePage {
         .textAlign(TextAlign.End)
     }
     .width('100%')
+  }
+
+  private profileUserId(): string {
+    return this.activeUserId.length > 0 ? this.activeUserId : ApiClient.currentUserId;
+  }
+
+  private hydrateBasicFields() {
+    this.ageText = this.profile.age > 0 ? `${this.profile.age}` : '';
+    this.heightText = this.profile.heightCm > 0 ? `${this.profile.heightCm}` : '';
+    this.weightText = this.profile.weightKg > 0 ? `${this.profile.weightKg}` : '';
+    this.selectedGender = this.profile.gender;
+    this.selectedGoal = this.profile.goal;
+    this.ageEditable = false;
+    this.heightEditable = false;
+    this.weightEditable = false;
+    this.basicApplyMessage = '';
   }
 
   private hydrateTextFields() {
@@ -598,13 +770,49 @@ export struct ProfilePage {
     if (this.profile.goal == null) {
       this.profile.goal = HealthGoal.BALANCED;
     }
+    if (this.profile.age < 0) {
+      this.profile.age = 0;
+    }
+    if (this.profile.heightCm < 0) {
+      this.profile.heightCm = 0;
+    }
+    if (this.profile.weightKg < 0) {
+      this.profile.weightKg = 0;
+    }
   }
 
   private rebuildAssessment() {
-    this.profile.userId = ApiClient.currentUserId;
+    this.profile.userId = this.profileUserId();
     this.profile.chronicConditions = this.splitTags(this.chronicText);
     this.profile.taboos = this.splitTags(this.tabooText);
     this.profile.tastePreferences = this.splitTags(this.tasteText);
+
+    if (!this.hasCompleteBasicInfo()) {
+      const emptyTarget = this.emptyNutritionTarget();
+      const emptyAssessment: HealthAssessment = {
+        bmi: 0,
+        bmiLevel: '--',
+        target: emptyTarget,
+        advices: ['--']
+      };
+      this.bmiValue = 0;
+      this.bmiLevelText = '--';
+      this.dailyCalories = 0;
+      this.proteinGram = 0;
+      this.fatGram = 0;
+      this.carbohydrateGram = 0;
+      this.macroRatioText = '--';
+      this.adviceItems = ['--'];
+      this.assessment = emptyAssessment;
+      this.portraitImageKey = '';
+      this.portraitBmiRangeKey = '';
+      this.portraitBmiCalloutText = '--';
+      this.portraitChronicCalloutText = '--';
+      this.portraitNutritionCalloutText = '--';
+      this.portraitGoalCalloutText = '--';
+      this.persistLocalAssessment();
+      return;
+    }
 
     const bmi = this.calculateBmi();
     const bmiLevel = this.bmiLevel(bmi);
@@ -924,6 +1132,9 @@ export struct ProfilePage {
   }
 
   private portraitText(): string {
+    if (!this.hasCompleteBasicInfo()) {
+      return '--';
+    }
     const chronic = this.profile.chronicConditions.length === 0 ? '暂无慢病标记' : `关注${this.profile.chronicConditions.join('、')}`;
     const taboos = this.profile.taboos.length === 0 ? '暂无明确忌口' : `需避开${this.profile.taboos.join('、')}`;
     const tastes = this.profile.tastePreferences.length === 0 ? '偏好待完善' : `偏好${this.profile.tastePreferences.join('、')}`;
@@ -967,6 +1178,91 @@ export struct ProfilePage {
       return '控压';
     }
     return '均衡健康';
+  }
+
+  private hasCompleteBasicInfo(): boolean {
+    return this.profile.age > 0 && this.profile.heightCm > 0 && this.profile.weightKg > 0;
+  }
+
+  private emptyProfile(userId: string): HealthProfile {
+    return {
+      userId: userId,
+      age: 0,
+      gender: Gender.UNKNOWN,
+      heightCm: 0,
+      weightKg: 0,
+      goal: HealthGoal.BALANCED,
+      chronicConditions: [],
+      taboos: [],
+      tastePreferences: []
+    };
+  }
+
+  private emptyNutritionTarget(): NutritionTarget {
+    return {
+      dailyCalories: 0,
+      proteinGram: 0,
+      fatGram: 0,
+      carbohydrateGram: 0,
+      macroRatio: '--'
+    };
+  }
+
+  private bmiDisplayText(): string {
+    return this.bmiValue > 0 ? `${this.bmiValue}` : '--';
+  }
+
+  private calorieDisplayText(): string {
+    return this.dailyCalories > 0 ? `${this.dailyCalories}` : '--';
+  }
+
+  private proteinDisplayText(): string {
+    return this.proteinGram > 0 ? `${this.proteinGram}g` : '--';
+  }
+
+  private fatDisplayText(): string {
+    return this.fatGram > 0 ? `${this.fatGram}g` : '--';
+  }
+
+  private carbohydrateDisplayText(): string {
+    return this.carbohydrateGram > 0 ? `${this.carbohydrateGram}g` : '--';
+  }
+
+  private async applyBasicInfo() {
+    const nextAge = Number(this.ageText);
+    const nextHeight = Number(this.heightText);
+    const nextWeight = Number(this.weightText);
+    if (Number.isNaN(nextAge) || Number.isNaN(nextHeight) || Number.isNaN(nextWeight)
+      || nextAge <= 0 || nextHeight <= 0 || nextWeight <= 0) {
+      this.basicApplyMessage = '年龄、身高、体重必须填写大于 0 的数字';
+      return;
+    }
+
+    this.profile.age = Math.round(nextAge);
+    this.profile.heightCm = Number(nextHeight.toFixed(1));
+    this.profile.weightKg = Number(nextWeight.toFixed(1));
+    this.profile.gender = this.selectedGender;
+    this.profile.goal = this.selectedGoal;
+    this.ageText = `${this.profile.age}`;
+    this.heightText = `${this.profile.heightCm}`;
+    this.weightText = `${this.profile.weightKg}`;
+    this.ageEditable = false;
+    this.heightEditable = false;
+    this.weightEditable = false;
+    this.rebuildAssessment();
+
+    try {
+      const savedProfile = await ApiClient.saveProfile(this.profile);
+      this.profile = savedProfile;
+      this.normalizeProfile();
+      this.hydrateBasicFields();
+      this.hydrateTextFields();
+      this.rebuildAssessment();
+      this.basicApplyMessage = '基础信息已应用并同步到数据库，体能评估已更新';
+      this.saveMessage = '';
+    } catch (error) {
+      this.basicApplyMessage = '后端暂不可用，已在本地应用基础信息';
+    }
   }
 
   private async saveProfile() {

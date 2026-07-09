@@ -79,4 +79,13 @@ public class UserRepository {
                 password,
                 id);
     }
+
+    public void migrateUserIdToUsername(String oldId, String username) {
+        jdbcTemplate.update("UPDATE health_profile SET user_id = ? WHERE user_id = ?", username, oldId);
+        jdbcTemplate.update("UPDATE diet_record SET user_id = ? WHERE user_id = ?", username, oldId);
+        jdbcTemplate.update("UPDATE recipe_favorite SET user_id = ? WHERE user_id = ?", username, oldId);
+        jdbcTemplate.update("UPDATE recipe_history SET user_id = ? WHERE user_id = ?", username, oldId);
+        jdbcTemplate.update("UPDATE user_sync_setting SET user_id = ? WHERE user_id = ?", username, oldId);
+        jdbcTemplate.update("UPDATE user_account SET id = ? WHERE id = ?", username, oldId);
+    }
 }

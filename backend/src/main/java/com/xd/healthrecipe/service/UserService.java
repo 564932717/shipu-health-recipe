@@ -11,10 +11,10 @@ import com.xd.healthrecipe.dto.UserSession;
 import com.xd.healthrecipe.repository.ProfileRepository;
 import com.xd.healthrecipe.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class UserService {
@@ -26,25 +26,30 @@ public class UserService {
         this.profileRepository = profileRepository;
     }
 
+    @Transactional
     public UserSession register(RegisterRequest request) {
-        if (userRepository.existsByUsername(request.username())) {
+        String username = request.username().trim();
+        if (userRepository.existsByUsername(username)) {
             throw new IllegalArgumentException("用户名已存在");
         }
-        String id = UUID.randomUUID().toString();
-        UserAccount account = new UserAccount(id, request.username(), request.password(),
-                request.displayName() == null || request.displayName().isBlank() ? request.username() : request.displayName(),
-                LocalDateTime.now());
+        String displayName = request.displayName() == null || request.displayName().isBlank()
+                ? username
+                : request.displayName().trim();
+        UserAccount account = new UserAccount(username, username, request.password(), displayName, LocalDateTime.now());
         userRepository.save(account);
         profileRepository.save(defaultProfile(account.id()));
         return new UserSession(account.id(), account.username(), account.displayName());
     }
 
+    @Transactional
     public UserSession login(LoginRequest request) {
-        UserAccount account = userRepository.findByUsername(request.username())
+        String username = request.username().trim();
+        UserAccount account = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("该用户还未在系统内注册，请先注册"));
         if (!account.password().equals(request.password())) {
             throw new IllegalArgumentException("密码错误，请重新输入");
         }
+        account = ensureUsernameAsUserId(account);
         return new UserSession(account.id(), account.username(), account.displayName());
     }
 
@@ -66,14 +71,28 @@ public class UserService {
     private HealthProfile defaultProfile(String userId) {
         return new HealthProfile(
                 userId,
-                22,
+                0,
                 Gender.UNKNOWN,
-                170,
-                65,
+                0,
+                0,
                 HealthGoal.BALANCED,
                 List.of(),
                 List.of(),
-                List.of("清淡")
+                List.of()
+        );
+    }
+
+    private UserAccount ensureUsernameAsUserId(UserAccount account) {
+        if (account.id().equals(account.username())) {
+            return account;
+        }
+        userRepository.migrateUserIdToUsername(account.id(), account.username());
+        return new UserAccount(
+                account.username(),
+                account.username(),
+                account.password(),
+                account.displayName(),
+                account.createdAt()
         );
     }
 }

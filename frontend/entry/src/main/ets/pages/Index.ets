@@ -10,6 +10,7 @@ import { UserCenterPage } from './UserCenterPage';
 @Component
 struct Index {
   @State isAuthed: boolean = false;
+  @State currentUserId: string = '';
   @State currentUserName: string = '';
   @State panelMode: number = -1;
   @State loginUsername: string = '';
@@ -318,7 +319,7 @@ struct Index {
       .tabBar('首页')
 
       TabContent() {
-        ProfilePage()
+        ProfilePage({ activeUserId: this.currentUserId })
       }
       .tabBar('档案')
 
@@ -431,6 +432,7 @@ struct Index {
   }
 
   private finishAuth(session: UserSession) {
+    this.currentUserId = session.userId;
     this.currentUserName = session.displayName.length > 0 ? session.displayName : session.username;
     this.isAuthed = true;
   }

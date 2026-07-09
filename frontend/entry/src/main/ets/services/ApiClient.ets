@@ -41,13 +41,13 @@ export class ApiClient {
   static baseUrl: string = 'http://10.254.57.26:8080';
   static useMock: boolean = false;
   static fallbackToMockAuth: boolean = true;
-  static currentUserId: string = 'demo-user';
+  static currentUserId: string = 'demo';
   static currentUserName: string = '演示用户';
   static lastError: string = '';
 
   private static mockAccounts: MockAccount[] = [
     {
-      userId: 'demo-user',
+      userId: 'demo',
       username: 'demo',
       password: '123456',
       displayName: '演示用户'
@@ -56,7 +56,7 @@ export class ApiClient {
 
   private static mockUserRecipeStates: MockUserRecipeState[] = [
     {
-      userId: 'demo-user',
+      userId: 'demo',
       favoriteIds: ['B001', 'L001'],
       historyIds: ['L001', 'B001', 'D002'],
       syncEnabled: true
@@ -66,7 +66,7 @@ export class ApiClient {
   private static mockDietRecords: DietRecord[] = [
     {
       id: 'R001',
-      userId: 'demo-user',
+      userId: 'demo',
       foodName: '燕麦鸡蛋牛奶早餐',
       mealType: MealType.BREAKFAST,
       calories: 420,
@@ -77,7 +77,7 @@ export class ApiClient {
     },
     {
       id: 'R002',
-      userId: 'demo-user',
+      userId: 'demo',
       foodName: '糙米鸡胸蔬菜碗',
       mealType: MealType.LUNCH,
       calories: 560,
@@ -91,7 +91,7 @@ export class ApiClient {
   static async login(request: LoginRequest): Promise<UserSession> {
     if (request.username.trim().toLowerCase() === 'admin') {
       const adminSession: UserSession = {
-        userId: 'admin-test-user',
+        userId: 'admin',
         username: 'admin',
         displayName: 'admin 测试账号'
       };
@@ -133,7 +133,7 @@ export class ApiClient {
       }
       const displayName = request.displayName.length > 0 ? request.displayName : request.username;
       const newAccount: MockAccount = {
-        userId: `mock-${Date.now()}`,
+        userId: request.username,
         username: request.username,
         password: request.password,
         displayName: displayName
@@ -154,6 +154,7 @@ export class ApiClient {
       return session;
     }
     const result = await ApiClient.request<UserSession>('POST', '/api/users/register', request);
+    ApiClient.rememberSession(result.data);
     return result.data;
   }
 

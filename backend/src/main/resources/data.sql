@@ -1,21 +1,30 @@
+UPDATE health_profile SET user_id = 'demo' WHERE user_id = 'demo-user';
+UPDATE diet_record SET user_id = 'demo' WHERE user_id = 'demo-user';
+UPDATE recipe_favorite SET user_id = 'demo' WHERE user_id = 'demo-user';
+UPDATE recipe_history SET user_id = 'demo' WHERE user_id = 'demo-user';
+UPDATE user_sync_setting SET user_id = 'demo' WHERE user_id = 'demo-user';
+UPDATE user_account SET id = 'demo' WHERE id = 'demo-user' AND username = 'demo';
+UPDATE health_profile
+SET age = 0, height_cm = 0, weight_kg = 0, taste_preferences = ''
+WHERE age = 22
+  AND height_cm = 170
+  AND weight_kg = 65
+  AND gender = 'UNKNOWN'
+  AND goal = 'BALANCED'
+  AND chronic_conditions = ''
+  AND taboos = ''
+  AND taste_preferences = '清淡';
+
 INSERT INTO user_account (id, username, password, display_name, created_at)
-VALUES ('demo-user', 'demo', '123456', '演示用户', NOW())
+VALUES ('demo', 'demo', '123456', '演示用户', NOW())
 ON DUPLICATE KEY UPDATE password = VALUES(password), display_name = VALUES(display_name);
 
 INSERT INTO health_profile
 (user_id, age, gender, height_cm, weight_kg, goal, chronic_conditions, taboos, taste_preferences, updated_at)
 VALUES
-('demo-user', 22, 'MALE', 175, 72, 'FAT_LOSS', '轻度高血压', '花生,高盐', '清淡,高蛋白', NOW())
+('demo', 22, 'MALE', 175, 72, 'FAT_LOSS', '轻度高血压', '花生,高盐', '清淡,高蛋白', NOW())
 ON DUPLICATE KEY UPDATE
-age = VALUES(age),
-gender = VALUES(gender),
-height_cm = VALUES(height_cm),
-weight_kg = VALUES(weight_kg),
-goal = VALUES(goal),
-chronic_conditions = VALUES(chronic_conditions),
-taboos = VALUES(taboos),
-taste_preferences = VALUES(taste_preferences),
-updated_at = NOW();
+user_id = user_id;
 
 INSERT INTO recipe
 (id, name, meal_type, category, suitable_goals, tags, ingredients, steps, calories, protein_gram, fat_gram, carbohydrate_gram)
@@ -43,10 +52,10 @@ carbohydrate_gram = VALUES(carbohydrate_gram);
 INSERT INTO diet_record
 (id, user_id, food_name, meal_type, calories, protein_gram, fat_gram, carbohydrate_gram, eaten_at)
 VALUES
-('demo-record-breakfast', 'demo-user', '燕麦鸡蛋牛奶早餐', 'BREAKFAST', 420, 28, 12, 48, NOW() - INTERVAL 8 HOUR),
-('demo-record-lunch', 'demo-user', '糙米鸡胸蔬菜碗', 'LUNCH', 560, 42, 14, 66, NOW() - INTERVAL 3 HOUR),
-('demo-record-dinner', 'demo-user', '清蒸鱼配杂粮饭', 'DINNER', 520, 38, 13, 60, NOW() - INTERVAL 1 DAY),
-('demo-record-snack', 'demo-user', '无糖酸奶坚果杯', 'SNACK', 220, 14, 12, 16, NOW() - INTERVAL 2 DAY)
+('demo-record-breakfast', 'demo', '燕麦鸡蛋牛奶早餐', 'BREAKFAST', 420, 28, 12, 48, NOW() - INTERVAL 8 HOUR),
+('demo-record-lunch', 'demo', '糙米鸡胸蔬菜碗', 'LUNCH', 560, 42, 14, 66, NOW() - INTERVAL 3 HOUR),
+('demo-record-dinner', 'demo', '清蒸鱼配杂粮饭', 'DINNER', 520, 38, 13, 60, NOW() - INTERVAL 1 DAY),
+('demo-record-snack', 'demo', '无糖酸奶坚果杯', 'SNACK', 220, 14, 12, 16, NOW() - INTERVAL 2 DAY)
 ON DUPLICATE KEY UPDATE
 food_name = VALUES(food_name),
 meal_type = VALUES(meal_type),
@@ -57,17 +66,17 @@ carbohydrate_gram = VALUES(carbohydrate_gram),
 eaten_at = VALUES(eaten_at);
 
 INSERT INTO recipe_favorite (user_id, recipe_id, created_at)
-VALUES ('demo-user', 'B001', NOW())
+VALUES ('demo', 'B001', NOW())
 ON DUPLICATE KEY UPDATE created_at = created_at;
 
 INSERT INTO recipe_history (user_id, recipe_id, visit_count, last_viewed_at)
-VALUES ('demo-user', 'B001', 1, NOW())
+VALUES ('demo', 'B001', 1, NOW())
 ON DUPLICATE KEY UPDATE
 visit_count = recipe_history.visit_count + 1,
 last_viewed_at = NOW();
 
 INSERT INTO user_sync_setting (user_id, sync_enabled, updated_at)
-VALUES ('demo-user', TRUE, NOW())
+VALUES ('demo', TRUE, NOW())
 ON DUPLICATE KEY UPDATE
 sync_enabled = VALUES(sync_enabled),
 updated_at = NOW();

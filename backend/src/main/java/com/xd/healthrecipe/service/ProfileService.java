@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Service
 public class ProfileService {
-    public static final String DEMO_USER_ID = "demo-user";
+    public static final String DEMO_USER_ID = "demo";
 
     private final ProfileRepository profileRepository;
 

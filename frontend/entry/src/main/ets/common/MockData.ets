@@ -2,7 +2,7 @@ import { Gender, HealthGoal, HealthProfile, MealPlan, MealType, NutritionSummary
 
 export class MockData {
   static profile: HealthProfile = {
-    userId: 'demo-user',
+    userId: 'demo',
     age: 22,
     gender: Gender.MALE,
     heightCm: 175,
@@ -101,7 +101,7 @@ export class MockData {
   };
 
   static summary: NutritionSummary = {
-    userId: 'demo-user',
+    userId: 'demo',
     totalCalories: 980,
     totalProteinGram: 70,
     totalFatGram: 26,
@@ -114,7 +114,7 @@ export class MockData {
   };
 
   static weeklyReport: WeeklyReport = {
-    userId: 'demo-user',
+    userId: 'demo',
     startDate: '2026-07-01',
     endDate: '2026-07-07',
     averageCalories: 1680,
