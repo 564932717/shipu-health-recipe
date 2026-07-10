@@ -123,16 +123,72 @@ export class MockData {
 
   static weeklyReport: WeeklyReport = {
     userId: 'demo',
-    startDate: '2026-07-01',
-    endDate: '2026-07-07',
+    startDate: '2026-07-04',
+    endDate: '2026-07-10',
     averageCalories: 1680,
     recordDays: 5,
     completionLevel: '接近目标',
     trendHighlights: [
-      '本周已记录 5 天饮食数据。',
-      '日均摄入约 1680 千卡。',
-      '晚餐热量整体控制较好。'
+      '本周已记录 5/7 天饮食数据，记录率 71.4%。',
+      '日均摄入约 1680 千卡（蛋白质 72g / 脂肪 38g / 碳水 210g）。',
+      '周热量趋势：与上周基本持平。',
+      '记录最多的餐次为午餐，共 5 条记录。'
     ],
-    aiSuggestions: ['继续保持高蛋白、足量蔬菜和规律记录。']
+    aiSuggestions: [
+      '本周热量控制较为稳定（完成率 89.6%），继续保持均衡搭配和规律作息。',
+      '蛋白质摄入稍显不足（完成率 71.3%），建议每餐搭配足量瘦肉、鱼虾、豆制品或蛋奶类食物。',
+      '继续保持高蛋白、足量蔬菜和规律记录，下一份周报将涵盖更多维度的分析。'
+    ],
+    dailyCalories: {
+      '周一': 450,
+      '周二': 520,
+      '周三': 380,
+      '周四': 610,
+      '周五': 430,
+      '周六': 480,
+      '周日': 350
+    },
+    dailyProtein: {
+      '周一': 22,
+      '周二': 28,
+      '周三': 18,
+      '周四': 35,
+      '周五': 20,
+      '周六': 24,
+      '周日': 16
+    },
+    dailyFat: {
+      '周一': 10,
+      '周二': 12,
+      '周三': 9,
+      '周四': 14,
+      '周五': 10,
+      '周六': 11,
+      '周日': 8
+    },
+    dailyCarbs: {
+      '周一': 45,
+      '周二': 52,
+      '周三': 38,
+      '周四': 60,
+      '周五': 42,
+      '周六': 48,
+      '周日': 36
+    },
+    avgProtein: 72,
+    avgFat: 38,
+    avgCarbs: 210,
+    calorieCompletionRate: 89.6,
+    proteinCompletionRate: 71.3,
+    fatCompletionRate: 73.1,
+    carbCompletionRate: 83.7,
+    recordDayRate: 71.4,
+    breakfastCount: 3,
+    lunchCount: 5,
+    dinnerCount: 4,
+    snackCount: 2,
+    weekOverWeekCalorieChange: 0,
+    weekOverWeekTrend: 'STABLE',
+    weeklyRecords: []
   };
 }

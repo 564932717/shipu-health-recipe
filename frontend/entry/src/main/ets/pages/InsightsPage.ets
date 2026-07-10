@@ -623,6 +623,8 @@ export struct InsightsPage {
       this.matchedRecipeName = '';
       this.message = '记录成功，今日与本周统计已更新';
       this.isError = false;
+      const version = (AppStorage.get<number>('dietVersion') ?? 0) + 1;
+      AppStorage.setOrCreate('dietVersion', version);
       await this.load();
     } catch (error) {
       this.showError(ApiClient.lastError.length > 0 ? ApiClient.lastError : '保存失败，请稍后重试');

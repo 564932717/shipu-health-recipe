@@ -80,6 +80,16 @@ public class UserRepository {
                 id);
     }
 
+    public void updateDisplayName(String id, String displayName) {
+        jdbcTemplate.update("""
+                        UPDATE user_account
+                        SET display_name = ?
+                        WHERE id = ?
+                        """,
+                displayName,
+                id);
+    }
+
     public void migrateUserIdToUsername(String oldId, String username) {
         jdbcTemplate.update("UPDATE health_profile SET user_id = ? WHERE user_id = ?", username, oldId);
         jdbcTemplate.update("UPDATE diet_record SET user_id = ? WHERE user_id = ?", username, oldId);

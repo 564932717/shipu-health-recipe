@@ -1,4 +1,4 @@
-import { HealthProfile, MealPlan, Recipe, RecipeHistoryItem, RecipePageResponse } from '../common/Models';
+import { HealthProfile, MealPlan, Recipe, RecipePageResponse } from '../common/Models';
 import { MockData } from '../common/MockData';
 import { ApiClient } from '../services/ApiClient';
 import { SortSelector } from './SortSelector';
@@ -11,7 +11,6 @@ export struct RecipeHubPage {
   @State keyword: string = '';
   @State categoryIndex: number = 0;
   @StorageLink('favIds') favoriteIds: string[] = [];
-  @State historyNames: string[] = [];
   @State message: string = '';
   @State currentPage: number = 1;
   @State totalPages: number = 1;
@@ -28,7 +27,7 @@ export struct RecipeHubPage {
     const profile: HealthProfile = await ApiClient.getProfile(ApiClient.currentUserId);
     this.plan = await ApiClient.recommend(profile);
     await this.loadRecipes();
-    await this.loadUserRecipeState();
+    await this.refreshFavoriteState();
   }
 
   onSortChanged() {
@@ -63,15 +62,6 @@ export struct RecipeHubPage {
     }
   }
 
-  async loadUserRecipeState() {
-    try {
-      await this.refreshFavoriteState();
-      await this.refreshHistoryState();
-    } catch (error) {
-      this.message = ApiClient.lastError.length > 0 ? ApiClient.lastError : '收藏与历史加载失败，请稍后重试';
-    }
-  }
-
   build() {
     Scroll() {
       Column({ space: 16 }) {
@@ -81,7 +71,6 @@ export struct RecipeHubPage {
         this.sortSection()
         this.recipeListSection()
         this.paginationSection()
-        this.favoriteSection()
       }
       .padding({ left: 16, right: 16, top: 18, bottom: 24 })
     }
@@ -95,7 +84,7 @@ export struct RecipeHubPage {
         .fontSize(26)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
-      Text('AI 推荐、分类浏览、详情、收藏与历史记录集中管理')
+      Text('AI 推荐、分类浏览与详情，收藏管理请到「我的」页面')
         .fontSize(13)
         .fontColor('#657064')
     }
@@ -415,52 +404,6 @@ export struct RecipeHubPage {
     .width('100%')
   }
 
-  @Builder
-  favoriteSection() {
-    Column({ space: 12 }) {
-      Text('收藏与历史')
-        .fontSize(19)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#071725')
-        .width('100%')
-      Text(this.favoriteIds.length === 0 ? '暂无收藏食谱' : `已收藏 ${this.favoriteIds.length} 道食谱`)
-        .fontSize(13)
-        .fontColor('#657064')
-        .width('100%')
-      Text(this.historyNames.length === 0 ? '暂无浏览历史' : `最近查看：${this.historyNames.join('、')}`)
-        .fontSize(13)
-        .fontColor('#657064')
-        .width('100%')
-      Row({ space: 10 }) {
-        Button('查看全部收藏')
-          .height(38)
-          .fontSize(13)
-          .fontColor('#156B45')
-          .backgroundColor('#E8F4EC')
-          .borderRadius(19)
-          .layoutWeight(1)
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/FavoritePage' });
-          })
-        Button('查看全部历史')
-          .height(38)
-          .fontSize(13)
-          .fontColor('#071725')
-          .backgroundColor('#F4E8BA')
-          .borderRadius(19)
-          .layoutWeight(1)
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/HistoryPage' });
-          })
-      }
-      .width('100%')
-    }
-    .padding(16)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(18)
-    .width('100%')
-  }
-
   private mealTypeParam(): string {
     if (this.categoryIndex === 1) {
       return 'BREAKFAST';
@@ -491,14 +434,16 @@ export struct RecipeHubPage {
   }
 
   private async openRecipe(recipe: Recipe) {
-    this.mergeHistoryName(recipe.name);
     try {
       await ApiClient.addRecipeHistory(ApiClient.currentUserId, recipe.id);
-      await this.refreshHistoryState();
     } catch (error) {
       this.message = ApiClient.lastError.length > 0 ? ApiClient.lastError : '浏览历史同步失败';
     }
-    router.pushUrl({ url: 'pages/RecipeDetailPage', params: { recipeId: recipe.id } });
+    try {
+      router.pushUrl({ url: 'pages/RecipeDetailPage', params: { recipeId: recipe.id } });
+    } catch (_err) {
+      this.message = '页面跳转失败';
+    }
   }
 
   private isFavorite(id: string): boolean {
@@ -535,25 +480,5 @@ export struct RecipeHubPage {
     const ids: string[] = [];
     favorites.forEach((r: Recipe) => ids.push(r.id));
     AppStorage.setOrCreate('favIds', ids);
-  }
-
-  private async refreshHistoryState() {
-    const history = await ApiClient.listRecipeHistory(ApiClient.currentUserId);
-    this.historyNames = this.historyItemNames(history, 3);
-  }
-
-  private mergeHistoryName(name: string) {
-    const history = this.historyNames.filter((item: string) => item !== name);
-    history.unshift(name);
-    this.historyNames = history.slice(0, 3);
-  }
-
-  private historyItemNames(items: RecipeHistoryItem[], limit: number): string[] {
-    const names: string[] = [];
-    const count = items.length > limit ? limit : items.length;
-    for (let index = 0; index < count; index++) {
-      names.push(items[index].recipe.name);
-    }
-    return names;
   }
 }

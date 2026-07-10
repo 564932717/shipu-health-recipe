@@ -7,6 +7,7 @@ import com.xd.healthrecipe.dto.RecipeHistoryItem;
 import com.xd.healthrecipe.dto.RegisterRequest;
 import com.xd.healthrecipe.dto.SyncSettingRequest;
 import com.xd.healthrecipe.dto.UserCenterSummary;
+import com.xd.healthrecipe.dto.UpdateProfileRequest;
 import com.xd.healthrecipe.dto.UserSession;
 import com.xd.healthrecipe.domain.Recipe;
 import com.xd.healthrecipe.service.UserCenterService;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,6 +49,14 @@ public class UserController {
     public ApiResponse<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(request);
         return ApiResponse.ok(null);
+    }
+
+    @PutMapping("/{userId}/profile")
+    public ApiResponse<UserSession> updateProfile(
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateProfileRequest request
+    ) {
+        return ApiResponse.ok(userService.updateDisplayName(userId, request.displayName()));
     }
 
     @GetMapping("/{userId}/center")

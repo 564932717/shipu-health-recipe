@@ -34,6 +34,7 @@ export interface ChangePasswordRequest {
   userId: string;
   oldPassword: string;
   newPassword: string;
+  confirmPassword: string;
 }
 
 export interface SyncSettingRequest {
@@ -164,4 +165,28 @@ export interface WeeklyReport {
   completionLevel: string;
   trendHighlights: string[];
   aiSuggestions: string[];
+  dailyCalories: Record<string, number>;
+  dailyProtein: Record<string, number>;
+  dailyFat: Record<string, number>;
+  dailyCarbs: Record<string, number>;
+  avgProtein: number;
+  avgFat: number;
+  avgCarbs: number;
+  calorieCompletionRate: number;
+  proteinCompletionRate: number;
+  fatCompletionRate: number;
+  carbCompletionRate: number;
+  recordDayRate: number;
+  breakfastCount: number;
+  lunchCount: number;
+  dinnerCount: number;
+  snackCount: number;
+  weekOverWeekCalorieChange: number;
+  weekOverWeekTrend: string;
+  weeklyRecords: DietRecord[];
+}
+
+export interface UpdateProfileRequest {
+  userId: string;
+  displayName: string;
 }

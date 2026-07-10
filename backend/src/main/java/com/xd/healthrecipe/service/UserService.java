@@ -55,17 +55,28 @@ public class UserService {
 
     public void changePassword(ChangePasswordRequest request) {
         if (!request.newPassword().equals(request.confirmPassword())) {
-            throw new IllegalArgumentException("New password confirmation does not match");
+            throw new IllegalArgumentException("新密码两次输入不一致");
         }
         if (request.newPassword().length() < 6) {
-            throw new IllegalArgumentException("New password must be at least 6 characters");
+            throw new IllegalArgumentException("新密码至少需要 6 位字符");
         }
         UserAccount account = userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("User does not exist"));
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
         if (!account.password().equals(request.oldPassword())) {
-            throw new IllegalArgumentException("Old password is incorrect");
+            throw new IllegalArgumentException("原密码不正确，请重新输入");
+        }
+        if (request.oldPassword().equals(request.newPassword())) {
+            throw new IllegalArgumentException("新密码不能与原密码相同");
         }
         userRepository.updatePassword(account.id(), request.newPassword());
+    }
+
+    public UserSession updateDisplayName(String userId, String displayName) {
+        String name = displayName == null || displayName.isBlank() ? userId : displayName.trim();
+        UserAccount account = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        userRepository.updateDisplayName(userId, name);
+        return new UserSession(account.id(), account.username(), name);
     }
 
     private HealthProfile defaultProfile(String userId) {

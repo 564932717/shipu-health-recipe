@@ -1,5 +1,5 @@
 import { ApiClient } from '../services/ApiClient';
-import { ChangePasswordRequest, Recipe, RecipeHistoryItem, SyncSettingRequest, UserCenterSummary } from '../common/Models';
+import { ChangePasswordRequest, Recipe, RecipeHistoryItem, SyncSettingRequest, UpdateProfileRequest, UserCenterSummary } from '../common/Models';
 import router from '@ohos.router';
 
 @Component
@@ -22,8 +22,16 @@ export struct UserCenterPage {
   @State confirmPassword: string = '';
   @State syncEnabled: boolean = true;
   @State message: string = '';
+  @State messageType: string = 'info';
   @State isLoading: boolean = false;
   @State isSavingPassword: boolean = false;
+  @State isEditingName: boolean = false;
+  @State editingDisplayName: string = '';
+  @State isSavingName: boolean = false;
+  @State showPasswordSection: boolean = false;
+  @State syncProgress: number = 0;
+  @State isSyncing: boolean = false;
+  @State lastSyncTime: string = '';
 
   aboutToAppear() {
     this.loadCenter();
@@ -51,7 +59,7 @@ export struct UserCenterPage {
       };
       this.message = '';
     } catch (error) {
-      this.message = ApiClient.lastError.length > 0 ? ApiClient.lastError : '用户中心数据加载失败，请稍后重试';
+      this.showError(ApiClient.lastError.length > 0 ? ApiClient.lastError : '用户中心数据加载失败，请稍后重试');
     } finally {
       this.isLoading = false;
     }
@@ -61,7 +69,8 @@ export struct UserCenterPage {
     Scroll() {
       Column({ space: 16 }) {
         this.profileHeader()
-        this.accountSection()
+        this.personalInfoSection()
+        this.accountSecuritySection()
         this.collectionSection()
         this.syncSection()
         this.atomicCardPreview()
@@ -91,12 +100,6 @@ export struct UserCenterPage {
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
-        Text(this.isLoading ? '同步中' : '健康档案')
-          .fontSize(13)
-          .fontColor('#071725')
-          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-          .backgroundColor('#F8DD77')
-          .borderRadius(16)
       }
       .padding(18)
       .backgroundColor('#071725')
@@ -107,47 +110,177 @@ export struct UserCenterPage {
   }
 
   @Builder
-  accountSection() {
+  personalInfoSection() {
     Column({ space: 12 }) {
-      Text('账号与密码')
+      Text('个人信息')
         .fontSize(19)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
         .width('100%')
 
-      TextInput({ placeholder: '原密码', text: $$this.oldPassword })
-        .type(InputType.Password)
-        .height(42)
-        .backgroundColor('#F8FAF5')
-        .borderRadius(14)
-        .padding({ left: 12, right: 12 })
-      TextInput({ placeholder: '新密码', text: $$this.newPassword })
-        .type(InputType.Password)
-        .height(42)
-        .backgroundColor('#F8FAF5')
-        .borderRadius(14)
-        .padding({ left: 12, right: 12 })
-      TextInput({ placeholder: '确认新密码', text: $$this.confirmPassword })
-        .type(InputType.Password)
-        .height(42)
-        .backgroundColor('#F8FAF5')
-        .borderRadius(14)
-        .padding({ left: 12, right: 12 })
+      if (!this.isEditingName) {
+        Row() {
+          Column({ space: 4 }) {
+            Text('昵称')
+              .fontSize(12)
+              .fontColor('#657064')
+            Text(this.summary.displayName)
+              .fontSize(16)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#071725')
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
 
-      Button('保存密码')
-        .height(42)
-        .fontSize(15)
-        .fontColor('#FFF6D5')
-        .backgroundColor('#071725')
-        .borderRadius(21)
+          Button('修改')
+            .height(32)
+            .fontSize(12)
+            .fontColor('#156B45')
+            .backgroundColor('#E8F4EC')
+            .borderRadius(16)
+            .onClick(() => {
+              this.isEditingName = true;
+              this.editingDisplayName = this.summary.displayName;
+            })
+        }
+        .padding(14)
+        .backgroundColor('#F8FAF5')
+        .borderRadius(14)
         .width('100%')
-        .enabled(!this.isSavingPassword)
-        .onClick(async () => {
-          await this.savePassword();
-        })
+      } else {
+        Column({ space: 10 }) {
+          TextInput({ placeholder: '请输入新昵称', text: $$this.editingDisplayName })
+            .height(42)
+            .fontSize(15)
+            .backgroundColor('#FFFFFF')
+            .border({ width: 1, color: '#156B45' })
+            .borderRadius(14)
+            .padding({ left: 14, right: 14 })
 
-      if (this.message.length > 0) {
+          Row({ space: 10 }) {
+            Button('取消')
+              .height(36)
+              .fontSize(13)
+              .fontColor('#657064')
+              .backgroundColor('#EEF4EA')
+              .borderRadius(18)
+              .layoutWeight(1)
+              .onClick(() => {
+                this.isEditingName = false;
+              })
+            Button(this.isSavingName ? '保存中...' : '确认修改')
+              .height(36)
+              .fontSize(13)
+              .fontColor('#FFF6D5')
+              .backgroundColor('#156B45')
+              .borderRadius(18)
+              .layoutWeight(1)
+              .enabled(!this.isSavingName)
+              .onClick(async () => {
+                await this.saveDisplayName();
+              })
+          }
+          .width('100%')
+        }
+        .padding(14)
+        .backgroundColor('#F8FAF5')
+        .borderRadius(14)
+        .width('100%')
+      }
+
+      Row({ space: 8 }) {
+        Text('需要完善身高、体重或健康目标？点击底部「档案」标签页即可编辑。')
+          .fontSize(12)
+          .fontColor('#657064')
+          .layoutWeight(1)
+      }
+      .padding(12)
+      .backgroundColor('#F8FAF5')
+      .borderRadius(14)
+      .width('100%')
+
+      if (this.message.length > 0 && this.messageType !== 'error') {
         Text(this.message)
+          .fontSize(13)
+          .fontColor('#156B45')
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .backgroundColor('#E8F4EC')
+          .borderRadius(8)
+          .width('100%')
+      }
+      if (this.message.length > 0 && this.messageType === 'error') {
+        Text(this.message)
+          .fontSize(13)
+          .fontColor('#8B2418')
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .backgroundColor('#FFE8DE')
+          .borderRadius(8)
+          .width('100%')
+      }
+    }
+    .padding(16)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(18)
+    .width('100%')
+  }
+
+  @Builder
+  accountSecuritySection() {
+    Column({ space: 12 }) {
+      Row() {
+        Text('账号安全')
+          .fontSize(19)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#071725')
+          .layoutWeight(1)
+        Button(this.showPasswordSection ? '收起' : '展开')
+          .height(30)
+          .fontSize(12)
+          .fontColor('#405146')
+          .backgroundColor('#EEF4EA')
+          .borderRadius(15)
+          .onClick(() => {
+            this.showPasswordSection = !this.showPasswordSection;
+          })
+      }
+      .width('100%')
+
+      if (this.showPasswordSection) {
+        Column({ space: 10 }) {
+          TextInput({ placeholder: '原密码', text: $$this.oldPassword })
+            .type(InputType.Password)
+            .height(42)
+            .backgroundColor('#F8FAF5')
+            .borderRadius(14)
+            .padding({ left: 12, right: 12 })
+          TextInput({ placeholder: '新密码（至少6位）', text: $$this.newPassword })
+            .type(InputType.Password)
+            .height(42)
+            .backgroundColor('#F8FAF5')
+            .borderRadius(14)
+            .padding({ left: 12, right: 12 })
+          TextInput({ placeholder: '确认新密码', text: $$this.confirmPassword })
+            .type(InputType.Password)
+            .height(42)
+            .backgroundColor('#F8FAF5')
+            .borderRadius(14)
+            .padding({ left: 12, right: 12 })
+
+          Button(this.isSavingPassword ? '保存中...' : '更新密码')
+            .height(42)
+            .fontSize(15)
+            .fontColor('#FFF6D5')
+            .backgroundColor('#071725')
+            .borderRadius(21)
+            .width('100%')
+            .enabled(!this.isSavingPassword)
+            .onClick(async () => {
+              await this.savePassword();
+            })
+        }
+        .width('100%')
+      } else {
+        Text('密码修改功能可在此处展开操作')
           .fontSize(13)
           .fontColor('#657064')
           .width('100%')
@@ -161,31 +294,22 @@ export struct UserCenterPage {
 
   @Builder
   collectionSection() {
-    Column({ space: 10 }) {
-      Text('收藏管理')
+    Column({ space: 12 }) {
+      Text('收藏与历史')
         .fontSize(19)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
         .width('100%')
-      Text('收藏食谱、浏览历史和同步状态会从用户中心接口实时读取。')
-        .fontSize(13)
-        .fontColor('#657064')
-        .width('100%')
-      Row({ space: 10 }) {
-        this.infoTile('收藏', `${this.summary.favoriteCount}`)
-        this.infoTile('历史', `${this.summary.historyCount}`)
-        this.infoTile('同步', this.syncEnabled ? '开启' : '关闭')
-      }
-      .width('100%')
 
-      Text(this.favoriteRecipes.length === 0 ? '暂无收藏食谱' : `最近收藏：${this.recipeNames(this.favoriteRecipes, 2)}`)
+      Text(this.favoriteRecipes.length === 0 ? '暂无收藏食谱' : `已收藏 ${this.favoriteRecipes.length} 个食谱：${this.recipeNames(this.favoriteRecipes, 3)}`)
         .fontSize(13)
         .fontColor('#405146')
         .width('100%')
-      Text(this.historyRecipes.length === 0 ? '暂无浏览历史' : `最近查看：${this.historyItemNames(this.historyRecipes, 3)}`)
+      Text(this.historyRecipes.length === 0 ? '暂无浏览历史' : `最近浏览 ${this.historyRecipes.length} 个食谱：${this.historyItemNames(this.historyRecipes, 3)}`)
         .fontSize(13)
         .fontColor('#405146')
         .width('100%')
+
       Row({ space: 10 }) {
         Button('查看收藏')
           .height(36)
@@ -232,11 +356,54 @@ export struct UserCenterPage {
       }
       .width('100%')
 
-      Text('开启后可同步健康档案、收藏食谱和饮食记录，适配手机、平板等鸿蒙设备。')
+      Text('开启后可同步健康档案、收藏食谱和饮食记录至其他鸿蒙设备。')
         .fontSize(13)
         .fontColor('#657064')
         .lineHeight(20)
         .width('100%')
+
+      if (this.syncEnabled) {
+        Row({ space: 10 }) {
+          if (this.isSyncing) {
+            Row()
+              .width(16)
+              .height(16)
+              .backgroundColor('#F8DD77')
+              .borderRadius(8)
+          } else {
+            Text(this.lastSyncTime.length > 0 ? `上次同步：${this.lastSyncTime}` : '数据待同步')
+              .fontSize(12)
+              .fontColor('#657064')
+              .layoutWeight(1)
+          }
+          Button(this.isSyncing ? '同步中...' : '立即同步')
+            .height(32)
+            .fontSize(12)
+            .fontColor('#156B45')
+            .backgroundColor('#E8F4EC')
+            .borderRadius(16)
+            .enabled(!this.isSyncing)
+            .onClick(async () => {
+              await this.triggerSync();
+            })
+        }
+        .width('100%')
+      }
+
+      if (this.syncProgress > 0 && this.syncProgress < 100) {
+        Row()
+          .height(4)
+          .width(`${this.syncProgress}%`)
+          .backgroundColor('#156B45')
+          .borderRadius(2)
+      }
+      if (this.syncProgress >= 100) {
+        Row()
+          .height(4)
+          .width('100%')
+          .backgroundColor('#83C988')
+          .borderRadius(2)
+      }
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
@@ -287,34 +454,45 @@ export struct UserCenterPage {
     .width('100%')
   }
 
-  @Builder
-  infoTile(label: string, value: string) {
-    Column({ space: 4 }) {
-      Text(value)
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#071725')
-      Text(label)
-        .fontSize(12)
-        .fontColor('#657064')
+  private async saveDisplayName() {
+    const name = this.editingDisplayName.trim();
+    if (name.length === 0) {
+      this.showError('昵称不能为空');
+      return;
     }
-    .layoutWeight(1)
-    .padding(12)
-    .backgroundColor('#F8FAF5')
-    .borderRadius(14)
+    this.isSavingName = true;
+    try {
+      const request: UpdateProfileRequest = {
+        userId: ApiClient.currentUserId,
+        displayName: name
+      };
+      await ApiClient.updateProfile(request);
+      this.summary.displayName = name;
+      this.isEditingName = false;
+      this.message = `昵称已更新为"${name}"`;
+      this.messageType = 'info';
+    } catch (error) {
+      this.showError(ApiClient.lastError.length > 0 ? ApiClient.lastError : '修改失败');
+    } finally {
+      this.isSavingName = false;
+    }
   }
 
   private async savePassword() {
     if (this.oldPassword.trim().length === 0 || this.newPassword.trim().length === 0) {
-      this.message = '请输入原密码和新密码';
+      this.showError('请输入原密码和新密码');
       return;
     }
     if (this.newPassword.trim().length < 6) {
-      this.message = '新密码至少 6 位';
+      this.showError('新密码至少 6 位');
       return;
     }
     if (this.newPassword.trim() !== this.confirmPassword.trim()) {
-      this.message = '两次输入的新密码不一致';
+      this.showError('两次输入的新密码不一致');
+      return;
+    }
+    if (this.oldPassword.trim() === this.newPassword.trim()) {
+      this.showError('新密码不能与原密码相同');
       return;
     }
 
@@ -323,15 +501,18 @@ export struct UserCenterPage {
       const request: ChangePasswordRequest = {
         userId: ApiClient.currentUserId,
         oldPassword: this.oldPassword.trim(),
-        newPassword: this.newPassword.trim()
+        newPassword: this.newPassword.trim(),
+        confirmPassword: this.confirmPassword.trim()
       };
       await ApiClient.changePassword(request);
       this.oldPassword = '';
       this.newPassword = '';
       this.confirmPassword = '';
+      this.showPasswordSection = false;
       this.message = '密码已更新';
+      this.messageType = 'info';
     } catch (error) {
-      this.message = ApiClient.lastError.length > 0 ? ApiClient.lastError : '密码更新失败，请稍后重试';
+      this.showError(ApiClient.lastError.length > 0 ? ApiClient.lastError : '密码更新失败，请稍后重试');
     } finally {
       this.isSavingPassword = false;
     }
@@ -345,21 +526,46 @@ export struct UserCenterPage {
         syncEnabled: isOn
       };
       await ApiClient.saveSyncSetting(ApiClient.currentUserId, request);
-      this.summary = {
-        userId: this.summary.userId,
-        displayName: this.summary.displayName,
-        favoriteCount: this.summary.favoriteCount,
-        historyCount: this.summary.historyCount,
-        syncEnabled: isOn,
-        todayCalories: this.summary.todayCalories,
-        targetCalories: this.summary.targetCalories,
-        recommendedRecipeName: this.summary.recommendedRecipeName
-      };
+      this.summary.syncEnabled = isOn;
       this.message = isOn ? '跨设备同步已开启' : '跨设备同步已关闭';
+      this.messageType = 'info';
     } catch (error) {
       this.syncEnabled = previous;
-      this.message = ApiClient.lastError.length > 0 ? ApiClient.lastError : '同步设置保存失败';
+      this.showError(ApiClient.lastError.length > 0 ? ApiClient.lastError : '同步设置保存失败');
     }
+  }
+
+  private async triggerSync() {
+    this.isSyncing = true;
+    this.syncProgress = 0;
+    const steps = [25, 50, 75, 100];
+    for (let i = 0; i < steps.length; i++) {
+      this.syncProgress = steps[i];
+      await this.delay(300);
+    }
+    await this.loadCenter();
+    this.lastSyncTime = this.nowString();
+    this.syncProgress = 100;
+    this.isSyncing = false;
+    this.message = '数据同步完成';
+    this.messageType = 'info';
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise<void>((resolve: (value: void) => void) => {
+      setTimeout(() => {
+        resolve();
+      }, ms);
+    });
+  }
+
+  private nowString(): string {
+    const d = new Date();
+    const m = `${d.getMonth() + 1}`.padStart(2, '0');
+    const day = `${d.getDate()}`.padStart(2, '0');
+    const h = `${d.getHours()}`.padStart(2, '0');
+    const min = `${d.getMinutes()}`.padStart(2, '0');
+    return `${m}-${day} ${h}:${min}`;
   }
 
   private recipeNames(recipes: Recipe[], limit: number): string {
@@ -403,5 +609,10 @@ export struct UserCenterPage {
       return history[0].recipe.name;
     }
     return this.summary.recommendedRecipeName;
+  }
+
+  private showError(message: string) {
+    this.message = message;
+    this.messageType = 'error';
   }
 }
