@@ -1,6 +1,29 @@
-import { DietRecord, DietRecordRequest, MealType, NutritionSummary, WeeklyReport } from '../common/Models';
+import { DietRecord, DietRecordRequest, MealType, Recipe } from '../common/Models';
 import { MockData } from '../common/MockData';
 import { ApiClient } from '../services/ApiClient';
+
+interface NutritionTotals {
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  recordCount: number;
+  recordDays: number;
+}
+
+interface NutritionMetric {
+  label: string;
+  value: number;
+  target: number;
+  unit: string;
+  color: string;
+}
+
+interface MacroSlice {
+  label: string;
+  value: number;
+  color: string;
+}
 
 @Component
 export struct InsightsPage {
@@ -10,20 +33,46 @@ export struct InsightsPage {
   @State protein: string = '';
   @State fat: string = '';
   @State carbs: string = '';
-  @State summary: NutritionSummary = MockData.summary;
-  @State report: WeeklyReport = MockData.weeklyReport;
+  @State recipeMatches: Recipe[] = [];
+  @State matchedRecipeName: string = '';
+  @State isLookingUpFood: boolean = false;
+  @State activeScope: number = 0;
   @State records: DietRecord[] = [];
+  @State todayTotals: NutritionTotals = {
+    calories: 0,
+    protein: 0,
+    fat: 0,
+    carbs: 0,
+    recordCount: 0,
+    recordDays: 0
+  };
+  @State weekTotals: NutritionTotals = {
+    calories: 0,
+    protein: 0,
+    fat: 0,
+    carbs: 0,
+    recordCount: 0,
+    recordDays: 0
+  };
   @State message: string = '';
+  @State isError: boolean = false;
+  private pieSettings: RenderingContextSettings = new RenderingContextSettings(true);
+  private pieContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.pieSettings);
+  private foodLookupVersion: number = 0;
 
   aboutToAppear() {
     this.load();
   }
 
   async load() {
-    const target = MockData.mealPlan.assessment.target.dailyCalories;
-    this.summary = await ApiClient.getSummary(ApiClient.currentUserId, target);
-    this.report = await ApiClient.getWeeklyReport(ApiClient.currentUserId, target);
-    this.records = await ApiClient.listDietRecords(ApiClient.currentUserId);
+    try {
+      this.records = await ApiClient.listDietRecords(ApiClient.currentUserId);
+    } catch (error) {
+      this.records = [];
+      this.showError(ApiClient.lastError.length > 0 ? ApiClient.lastError : '饮食记录加载失败，请稍后重试');
+    }
+    this.recalculateTotals();
+    this.drawMacroPie();
   }
 
   build() {
@@ -31,8 +80,10 @@ export struct InsightsPage {
       Column({ space: 16 }) {
         this.header()
         this.recordForm()
-        this.todayChart()
-        this.weekReport()
+        this.scopeTabs()
+        this.summaryPanel()
+        this.targetBarChart()
+        this.macroPieChart()
         this.recordHistory()
       }
       .padding({ left: 16, right: 16, top: 18, bottom: 24 })
@@ -43,13 +94,15 @@ export struct InsightsPage {
   @Builder
   header() {
     Column({ space: 8 }) {
-      Text('营养统计')
-        .fontSize(26)
+      Text('饮食记录与营养统计')
+        .fontSize(25)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
-      Text('记录饮食、查看营养占比、追踪周报趋势')
+        .width('100%')
+      Text('手动记录每日饮食，自动汇总今日与本周营养摄入')
         .fontSize(13)
         .fontColor('#657064')
+        .width('100%')
     }
     .alignItems(HorizontalAlign.Start)
     .width('100%')
@@ -58,7 +111,7 @@ export struct InsightsPage {
   @Builder
   recordForm() {
     Column({ space: 12 }) {
-      Text('新增饮食记录')
+      Text('新增饮食')
         .fontSize(19)
         .fontWeight(FontWeight.Bold)
         .fontColor('#071725')
@@ -68,8 +121,44 @@ export struct InsightsPage {
         .height(44)
         .fontSize(14)
         .backgroundColor('#F8FAF5')
-        .borderRadius(14)
+        .borderRadius(8)
         .padding({ left: 14, right: 14 })
+        .onChange((text: string) => {
+          this.onFoodNameChange(text);
+        })
+
+      if (this.matchedRecipeName.length > 0) {
+        Text(`已自动带出：${this.matchedRecipeName}`)
+          .fontSize(12)
+          .fontColor('#156B45')
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+          .backgroundColor('#E8F4EC')
+          .borderRadius(8)
+          .width('100%')
+      }
+
+      if (this.recipeMatches.length > 0) {
+        Column({ space: 8 }) {
+          Row() {
+            Text(this.isLookingUpFood ? '正在匹配菜品' : '选择数据库菜品')
+              .fontSize(12)
+              .fontColor('#657064')
+              .layoutWeight(1)
+            Text('点击自动填入营养值')
+              .fontSize(12)
+              .fontColor('#156B45')
+          }
+          .width('100%')
+
+          ForEach(this.recipeMatches.slice(0, 4), (recipe: Recipe) => {
+            this.recipeOption(recipe)
+          })
+        }
+        .padding(10)
+        .backgroundColor('#F8FAF5')
+        .borderRadius(8)
+        .width('100%')
+      }
 
       Row({ space: 8 }) {
         this.mealButton('早餐', 0)
@@ -80,36 +169,68 @@ export struct InsightsPage {
       .width('100%')
 
       Row({ space: 8 }) {
-        this.numberInput('热量', this.calories, (value: string) => {
-          this.calories = value;
-        })
-        this.numberInput('蛋白质', this.protein, (value: string) => {
-          this.protein = value;
-        })
+        TextInput({ placeholder: '热量 kcal', text: $$this.calories })
+          .type(InputType.Number)
+          .height(42)
+          .layoutWeight(1)
+          .fontSize(14)
+          .backgroundColor('#F8FAF5')
+          .borderRadius(8)
+          .padding({ left: 12, right: 12 })
+          .onChange(() => {
+            this.clearMessage();
+          })
+        TextInput({ placeholder: '蛋白质 g', text: $$this.protein })
+          .type(InputType.Number)
+          .height(42)
+          .layoutWeight(1)
+          .fontSize(14)
+          .backgroundColor('#F8FAF5')
+          .borderRadius(8)
+          .padding({ left: 12, right: 12 })
+          .onChange(() => {
+            this.clearMessage();
+          })
       }
       .width('100%')
 
       Row({ space: 8 }) {
-        this.numberInput('脂肪', this.fat, (value: string) => {
-          this.fat = value;
-        })
-        this.numberInput('碳水', this.carbs, (value: string) => {
-          this.carbs = value;
-        })
+        TextInput({ placeholder: '脂肪 g', text: $$this.fat })
+          .type(InputType.Number)
+          .height(42)
+          .layoutWeight(1)
+          .fontSize(14)
+          .backgroundColor('#F8FAF5')
+          .borderRadius(8)
+          .padding({ left: 12, right: 12 })
+          .onChange(() => {
+            this.clearMessage();
+          })
+        TextInput({ placeholder: '碳水 g', text: $$this.carbs })
+          .type(InputType.Number)
+          .height(42)
+          .layoutWeight(1)
+          .fontSize(14)
+          .backgroundColor('#F8FAF5')
+          .borderRadius(8)
+          .padding({ left: 12, right: 12 })
+          .onChange(() => {
+            this.clearMessage();
+          })
       }
       .width('100%')
 
       if (this.message.length > 0) {
         Text(this.message)
           .fontSize(13)
-          .fontColor('#156B45')
-          .padding(10)
-          .backgroundColor('#E8F4EC')
-          .borderRadius(10)
+          .fontColor(this.isError ? '#8B2418' : '#156B45')
+          .padding({ left: 12, right: 12, top: 9, bottom: 9 })
+          .backgroundColor(this.isError ? '#FFE8DE' : '#E8F4EC')
+          .borderRadius(8)
           .width('100%')
       }
 
-      Button('保存记录')
+      Button('保存并更新统计')
         .height(46)
         .fontSize(16)
         .fontWeight(FontWeight.Bold)
@@ -123,141 +244,96 @@ export struct InsightsPage {
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
-    .borderRadius(18)
+    .borderRadius(8)
     .width('100%')
+  }
+
+  @Builder
+  recipeOption(recipe: Recipe) {
+    Row() {
+      Column({ space: 3 }) {
+        Text(recipe.name)
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#071725')
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(`${this.mealTypeName(recipe.mealType)} · ${recipe.calories} kcal · 蛋白 ${recipe.proteinGram}g / 脂肪 ${recipe.fatGram}g / 碳水 ${recipe.carbohydrateGram}g`)
+          .fontSize(12)
+          .fontColor('#657064')
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Text('填入')
+        .fontSize(12)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#156B45')
+    }
+    .padding(10)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .width('100%')
+    .onClick(() => {
+      this.applyRecipe(recipe);
+    })
   }
 
   @Builder
   mealButton(label: string, index: number) {
     Button(label)
-      .height(32)
+      .height(34)
+      .layoutWeight(1)
       .fontSize(12)
       .fontColor(this.mealIndex === index ? '#FFF6D5' : '#405146')
       .backgroundColor(this.mealIndex === index ? '#156B45' : '#EEF4EA')
-      .borderRadius(16)
+      .borderRadius(17)
       .onClick(() => {
         this.mealIndex = index;
+        this.clearMessage();
       })
   }
 
   @Builder
-  numberInput(label: string, value: string, onChange: (value: string) => void) {
-    TextInput({ placeholder: label, text: value })
-      .type(InputType.Number)
-      .height(42)
+  scopeTabs() {
+    Row({ space: 8 }) {
+      this.scopeButton('今日', 0)
+      this.scopeButton('本周', 1)
+    }
+    .padding(4)
+    .backgroundColor('#E7EFE4')
+    .borderRadius(8)
+    .width('100%')
+  }
+
+  @Builder
+  scopeButton(label: string, index: number) {
+    Button(label)
+      .height(38)
       .layoutWeight(1)
-      .fontSize(14)
-      .backgroundColor('#F8FAF5')
-      .borderRadius(14)
-      .padding({ left: 12, right: 12 })
-      .onChange((text: string) => {
-        onChange(text);
+      .fontSize(15)
+      .fontWeight(FontWeight.Bold)
+      .fontColor(this.activeScope === index ? '#FFF6D5' : '#405146')
+      .backgroundColor(this.activeScope === index ? '#156B45' : Color.Transparent)
+      .borderRadius(8)
+      .onClick(() => {
+        this.activeScope = index;
+        this.drawMacroPie();
       })
   }
 
   @Builder
-  todayChart() {
-    Column({ space: 12 }) {
-      Row() {
-        Text('今日营养达成')
-          .fontSize(19)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#071725')
-          .layoutWeight(1)
-        Text(`${this.summary.calorieCompletion}%`)
-          .fontSize(22)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#156B45')
-      }
-      .width('100%')
-
-      this.bar('热量', this.summary.totalCalories, MockData.mealPlan.assessment.target.dailyCalories, '#F8DD77')
-      this.bar('蛋白质', this.summary.totalProteinGram, MockData.mealPlan.assessment.target.proteinGram, '#A8D9A1')
-      this.bar('脂肪', this.summary.totalFatGram, MockData.mealPlan.assessment.target.fatGram, '#E7B4C8')
-      this.bar('碳水', this.summary.totalCarbohydrateGram, MockData.mealPlan.assessment.target.carbohydrateGram, '#93BFE8')
-
-      Row({ space: 10 }) {
-        this.pieItem('蛋白质', '#A8D9A1')
-        this.pieItem('脂肪', '#E7B4C8')
-        this.pieItem('碳水', '#93BFE8')
-      }
-      .width('100%')
-
-      ForEach(this.summary.suggestions, (item: string) => {
-        Text(item)
-          .fontSize(13)
-          .fontColor('#405146')
-          .width('100%')
-      })
-    }
-    .padding(16)
-    .backgroundColor('#FFFFFF')
-    .borderRadius(18)
-    .width('100%')
-  }
-
-  @Builder
-  bar(label: string, value: number, target: number, color: string) {
-    Column({ space: 6 }) {
-      Row() {
-        Text(label)
-          .fontSize(13)
-          .fontColor('#657064')
-          .layoutWeight(1)
-        Text(`${value}/${target}`)
-          .fontSize(13)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#071725')
-      }
-      .width('100%')
-      Stack({ alignContent: Alignment.Start }) {
-        Row()
-          .height(10)
-          .width('100%')
-          .backgroundColor('#EEF4EA')
-          .borderRadius(5)
-        Row()
-          .height(10)
-          .width(`${this.percent(value, target)}%`)
-          .backgroundColor(color)
-          .borderRadius(5)
-      }
-      .height(10)
-      .width('100%')
-    }
-    .width('100%')
-  }
-
-  @Builder
-  pieItem(label: string, color: string) {
-    Row({ space: 6 }) {
-      Text('')
-        .width(10)
-        .height(10)
-        .backgroundColor(color)
-        .borderRadius(5)
-      Text(label)
-        .fontSize(12)
-        .fontColor('#657064')
-    }
-  }
-
-  @Builder
-  weekReport() {
-    Column({ space: 12 }) {
-      Text('健康周报')
-        .fontSize(19)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#071725')
-        .width('100%')
-
+  summaryPanel() {
+    Column({ space: 14 }) {
       Row() {
         Column({ space: 4 }) {
-          Text(this.report.completionLevel)
-            .fontSize(24)
+          Text(this.activeScope === 0 ? '今日摄入' : '本周摄入')
+            .fontSize(19)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#156B45')
-          Text(`${this.report.startDate} 至 ${this.report.endDate}`)
+            .fontColor('#071725')
+          Text(this.scopeDescription())
             .fontSize(12)
             .fontColor('#657064')
         }
@@ -265,108 +341,568 @@ export struct InsightsPage {
         .layoutWeight(1)
 
         Column({ space: 2 }) {
-          Text(`${this.report.averageCalories}`)
-            .fontSize(24)
+          Text(`${this.activeTotals().recordCount}`)
+            .fontSize(25)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#071725')
-          Text('日均千卡')
+            .fontColor('#156B45')
+          Text('条记录')
             .fontSize(12)
             .fontColor('#657064')
         }
       }
       .width('100%')
 
-      ForEach(this.report.trendHighlights, (item: string) => {
-        Text(item)
-          .fontSize(13)
-          .fontColor('#405146')
-          .width('100%')
-      })
+      Row({ space: 10 }) {
+        ForEach(this.metricList().slice(0, 2), (item: NutritionMetric) => {
+          this.metricTile(item)
+        })
+      }
+      .width('100%')
 
-      ForEach(this.report.aiSuggestions, (item: string) => {
-        Text(`AI 建议：${item}`)
-          .fontSize(13)
+      Row({ space: 10 }) {
+        ForEach(this.metricList().slice(2, 4), (item: NutritionMetric) => {
+          this.metricTile(item)
+        })
+      }
+      .width('100%')
+    }
+    .padding(16)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .width('100%')
+  }
+
+  @Builder
+  metricTile(item: NutritionMetric) {
+    Column({ space: 6 }) {
+      Row() {
+        Text(item.label)
+          .fontSize(12)
+          .fontColor('#657064')
+          .layoutWeight(1)
+        Text(`${this.percent(item.value, item.target)}%`)
+          .fontSize(12)
+          .fontWeight(FontWeight.Bold)
           .fontColor('#071725')
-          .padding(12)
-          .backgroundColor('#F4E8BA')
-          .borderRadius(10)
-          .width('100%')
+      }
+      .width('100%')
+
+      Text(`${item.value}`)
+        .fontSize(23)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#071725')
+        .width('100%')
+
+      Text(`目标 ${item.target}${item.unit}`)
+        .fontSize(12)
+        .fontColor('#657064')
+        .width('100%')
+
+      Row()
+        .height(4)
+        .width(`${this.percent(item.value, item.target)}%`)
+        .backgroundColor(item.color)
+        .borderRadius(2)
+    }
+    .alignItems(HorizontalAlign.Start)
+    .padding(12)
+    .layoutWeight(1)
+    .backgroundColor('#F8FAF5')
+    .borderRadius(8)
+  }
+
+  @Builder
+  targetBarChart() {
+    Column({ space: 12 }) {
+      Text('达标柱状图')
+        .fontSize(19)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#071725')
+        .width('100%')
+
+      ForEach(this.metricList(), (item: NutritionMetric) => {
+        this.targetBar(item)
       })
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
-    .borderRadius(18)
+    .borderRadius(8)
+    .width('100%')
+  }
+
+  @Builder
+  targetBar(item: NutritionMetric) {
+    Column({ space: 6 }) {
+      Row() {
+        Text(item.label)
+          .fontSize(13)
+          .fontColor('#657064')
+          .layoutWeight(1)
+        Text(`${item.value}/${item.target}${item.unit}`)
+          .fontSize(13)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#071725')
+      }
+      .width('100%')
+
+      Stack({ alignContent: Alignment.Start }) {
+        Row()
+          .height(12)
+          .width('100%')
+          .backgroundColor('#EEF4EA')
+          .borderRadius(6)
+        Row()
+          .height(12)
+          .width(`${this.percent(item.value, item.target)}%`)
+          .backgroundColor(item.color)
+          .borderRadius(6)
+      }
+      .height(12)
+      .width('100%')
+    }
+    .width('100%')
+  }
+
+  @Builder
+  macroPieChart() {
+    Column({ space: 12 }) {
+      Text('三大营养素饼图')
+        .fontSize(19)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#071725')
+        .width('100%')
+
+      Row({ space: 16 }) {
+        Stack({ alignContent: Alignment.Center }) {
+          Canvas(this.pieContext)
+            .width(154)
+            .height(154)
+            .onReady(() => {
+              this.drawMacroPie();
+            })
+          Column({ space: 2 }) {
+            Text(`${this.macroTotal()}`)
+              .fontSize(22)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#071725')
+            Text('g')
+              .fontSize(12)
+              .fontColor('#657064')
+          }
+        }
+        .width(154)
+        .height(154)
+
+        Column({ space: 10 }) {
+          ForEach(this.macroSlices(), (item: MacroSlice) => {
+            this.pieLegend(item)
+          })
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+      }
+      .width('100%')
+
+      Text(this.macroTotal() === 0 ? '暂无营养素数据，保存记录后会生成占比。' : '饼图按蛋白质、脂肪、碳水的克数占比展示。')
+        .fontSize(12)
+        .fontColor('#657064')
+        .width('100%')
+    }
+    .padding(16)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .width('100%')
+  }
+
+  @Builder
+  pieLegend(item: MacroSlice) {
+    Row({ space: 8 }) {
+      Text('')
+        .width(10)
+        .height(10)
+        .backgroundColor(item.color)
+        .borderRadius(5)
+      Text(item.label)
+        .fontSize(13)
+        .fontColor('#657064')
+        .layoutWeight(1)
+      Text(`${item.value}g · ${this.macroPercent(item.value)}%`)
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#071725')
+    }
     .width('100%')
   }
 
   @Builder
   recordHistory() {
     Column({ space: 10 }) {
-      Text('饮食历史')
-        .fontSize(19)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#071725')
-        .width('100%')
+      Row() {
+        Text('最近记录')
+          .fontSize(19)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#071725')
+          .layoutWeight(1)
+        Text(`共 ${this.records.length} 条`)
+          .fontSize(12)
+          .fontColor('#657064')
+      }
+      .width('100%')
 
       if (this.records.length === 0) {
-        Text('暂无历史记录')
+        Text('暂无饮食记录')
           .fontSize(13)
           .fontColor('#657064')
           .width('100%')
       }
 
-      ForEach(this.records.slice(0, 5), (record: DietRecord) => {
+      ForEach(this.records.slice(0, 8), (record: DietRecord) => {
         Row() {
-          Column({ space: 3 }) {
+          Column({ space: 4 }) {
             Text(record.foodName)
               .fontSize(15)
               .fontWeight(FontWeight.Bold)
               .fontColor('#071725')
-            Text(`${record.mealType} · ${record.proteinGram}g 蛋白质 · ${record.carbohydrateGram}g 碳水`)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(`${this.mealTypeName(record.mealType)} · ${this.formatRecordTime(record.eatenAt)} · 蛋白 ${record.proteinGram}g / 脂肪 ${record.fatGram}g / 碳水 ${record.carbohydrateGram}g`)
               .fontSize(12)
               .fontColor('#657064')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
-          Text(`${record.calories} 千卡`)
+          Text(`${record.calories} kcal`)
             .fontSize(13)
             .fontWeight(FontWeight.Bold)
             .fontColor('#156B45')
         }
         .padding(12)
         .backgroundColor('#F8FAF5')
-        .borderRadius(12)
+        .borderRadius(8)
         .width('100%')
       })
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
-    .borderRadius(18)
+    .borderRadius(8)
     .width('100%')
   }
 
   private async submitRecord() {
-    if (this.foodName.trim().length === 0 || this.calories.trim().length === 0) {
-      this.message = '请填写食物名称和热量';
+    if (this.foodName.trim().length === 0) {
+      this.showError('请填写食物名称');
       return;
     }
+
+    const caloriesValue = this.readNumber(this.calories);
+    if (caloriesValue <= 0) {
+      this.showError('请填写有效热量');
+      return;
+    }
+
     const record: DietRecordRequest = {
       userId: ApiClient.currentUserId,
       foodName: this.foodName.trim(),
       mealType: this.mealTypeValue(),
-      calories: Number(this.calories),
-      proteinGram: Number(this.protein),
-      fatGram: Number(this.fat),
-      carbohydrateGram: Number(this.carbs)
+      calories: caloriesValue,
+      proteinGram: this.readNumber(this.protein),
+      fatGram: this.readNumber(this.fat),
+      carbohydrateGram: this.readNumber(this.carbs)
     };
-    await ApiClient.addDietRecord(record);
-    this.foodName = '';
+    try {
+      const savedRecord = await ApiClient.addDietRecord(record);
+      this.records.unshift(savedRecord);
+      this.recalculateTotals();
+      this.activeScope = 0;
+      this.drawMacroPie();
+      this.foodName = '';
+      this.clearNutritionInputs();
+      this.recipeMatches = [];
+      this.matchedRecipeName = '';
+      this.message = '记录成功，今日与本周统计已更新';
+      this.isError = false;
+      await this.load();
+    } catch (error) {
+      this.showError(ApiClient.lastError.length > 0 ? ApiClient.lastError : '保存失败，请稍后重试');
+    }
+  }
+
+  private async onFoodNameChange(text: string) {
+    this.foodName = text;
+    this.clearMessage();
+    if (this.matchedRecipeName.length > 0 && text.trim() !== this.matchedRecipeName) {
+      this.clearNutritionInputs();
+    }
+    this.matchedRecipeName = '';
+
+    const keyword = text.trim();
+    const lookupVersion = this.foodLookupVersion + 1;
+    this.foodLookupVersion = lookupVersion;
+    if (keyword.length === 0) {
+      this.recipeMatches = [];
+      this.isLookingUpFood = false;
+      return;
+    }
+
+    this.isLookingUpFood = true;
+    try {
+      const recipes = await ApiClient.searchRecipes(keyword);
+      if (this.foodName.trim() !== keyword || this.foodLookupVersion !== lookupVersion) {
+        return;
+      }
+      this.recipeMatches = recipes.slice(0, 6);
+      const exactRecipe = this.findExactRecipe(recipes, keyword);
+      if (exactRecipe != null) {
+        this.applyRecipe(exactRecipe);
+        return;
+      }
+      if (recipes.length === 1) {
+        this.applyRecipe(recipes[0]);
+      }
+    } catch (error) {
+      if (this.foodLookupVersion === lookupVersion) {
+        this.recipeMatches = [];
+      }
+    } finally {
+      if (this.foodLookupVersion === lookupVersion) {
+        this.isLookingUpFood = false;
+      }
+    }
+  }
+
+  private findExactRecipe(recipes: Recipe[], keyword: string): Recipe | null {
+    for (let index = 0; index < recipes.length; index++) {
+      const recipe = recipes[index];
+      if (recipe.name === keyword) {
+        return recipe;
+      }
+    }
+    return null;
+  }
+
+  private applyRecipe(recipe: Recipe) {
+    this.foodName = recipe.name;
+    this.calories = `${recipe.calories}`;
+    this.protein = `${recipe.proteinGram}`;
+    this.fat = `${recipe.fatGram}`;
+    this.carbs = `${recipe.carbohydrateGram}`;
+    this.mealIndex = this.mealIndexFromType(recipe.mealType);
+    this.matchedRecipeName = recipe.name;
+    this.recipeMatches = [];
+    this.isLookingUpFood = false;
+    this.clearMessage();
+  }
+
+  private clearNutritionInputs() {
     this.calories = '';
     this.protein = '';
     this.fat = '';
     this.carbs = '';
-    this.message = '记录成功，统计已更新';
-    await this.load();
+  }
+
+  private recalculateTotals() {
+    const todayKey = this.dateKey(new Date());
+    const weekStart = this.weekStartKey();
+    const weekEnd = todayKey;
+    const today: NutritionTotals = this.emptyTotals();
+    const week: NutritionTotals = this.emptyTotals();
+    const weekDays: string[] = [];
+
+    this.records.forEach((record: DietRecord) => {
+      const recordKey = this.recordDateKey(record);
+      if (recordKey === todayKey) {
+        this.addRecord(today, record);
+      }
+      if (recordKey >= weekStart && recordKey <= weekEnd) {
+        this.addRecord(week, record);
+        if (weekDays.indexOf(recordKey) < 0) {
+          weekDays.push(recordKey);
+        }
+      }
+    });
+
+    today.recordDays = today.recordCount > 0 ? 1 : 0;
+    week.recordDays = weekDays.length;
+    this.todayTotals = today;
+    this.weekTotals = week;
+  }
+
+  private emptyTotals(): NutritionTotals {
+    return {
+      calories: 0,
+      protein: 0,
+      fat: 0,
+      carbs: 0,
+      recordCount: 0,
+      recordDays: 0
+    };
+  }
+
+  private addRecord(target: NutritionTotals, record: DietRecord) {
+    target.calories += record.calories;
+    target.protein += record.proteinGram;
+    target.fat += record.fatGram;
+    target.carbs += record.carbohydrateGram;
+    target.recordCount += 1;
+  }
+
+  private activeTotals(): NutritionTotals {
+    return this.activeScope === 0 ? this.todayTotals : this.weekTotals;
+  }
+
+  private metricList(): NutritionMetric[] {
+    const totals = this.activeTotals();
+    return [
+      {
+        label: '热量',
+        value: totals.calories,
+        target: this.targetCalories(),
+        unit: 'kcal',
+        color: '#F8DD77'
+      },
+      {
+        label: '蛋白质',
+        value: totals.protein,
+        target: this.targetProtein(),
+        unit: 'g',
+        color: '#83C988'
+      },
+      {
+        label: '脂肪',
+        value: totals.fat,
+        target: this.targetFat(),
+        unit: 'g',
+        color: '#E7A0B9'
+      },
+      {
+        label: '碳水',
+        value: totals.carbs,
+        target: this.targetCarbs(),
+        unit: 'g',
+        color: '#76B7E8'
+      }
+    ];
+  }
+
+  private macroSlices(): MacroSlice[] {
+    const totals = this.activeTotals();
+    return [
+      {
+        label: '蛋白质',
+        value: totals.protein,
+        color: '#83C988'
+      },
+      {
+        label: '脂肪',
+        value: totals.fat,
+        color: '#E7A0B9'
+      },
+      {
+        label: '碳水',
+        value: totals.carbs,
+        color: '#76B7E8'
+      }
+    ];
+  }
+
+  private drawMacroPie() {
+    const center = 77;
+    const radius = 58;
+    const slices = this.macroSlices();
+    const total = this.macroTotal();
+
+    this.pieContext.clearRect(0, 0, 154, 154);
+    if (total <= 0) {
+      this.pieContext.beginPath();
+      this.pieContext.arc(center, center, radius, 0, Math.PI * 2);
+      this.pieContext.fillStyle = '#EEF4EA';
+      this.pieContext.fill();
+      this.pieContext.beginPath();
+      this.pieContext.arc(center, center, 34, 0, Math.PI * 2);
+      this.pieContext.fillStyle = '#FFFFFF';
+      this.pieContext.fill();
+      return;
+    }
+
+    let start = -Math.PI / 2;
+    slices.forEach((item: MacroSlice) => {
+      const angle = Math.PI * 2 * item.value / total;
+      this.pieContext.beginPath();
+      this.pieContext.moveTo(center, center);
+      this.pieContext.arc(center, center, radius, start, start + angle);
+      this.pieContext.closePath();
+      this.pieContext.fillStyle = item.color;
+      this.pieContext.fill();
+      start += angle;
+    });
+
+    this.pieContext.beginPath();
+    this.pieContext.arc(center, center, 34, 0, Math.PI * 2);
+    this.pieContext.fillStyle = '#FFFFFF';
+    this.pieContext.fill();
+  }
+
+  private scopeDescription(): string {
+    if (this.activeScope === 0) {
+      return `${this.dateKey(new Date())} 已记录 ${this.todayTotals.recordCount} 条`;
+    }
+    return `${this.weekStartKey()} 至 ${this.dateKey(new Date())}，覆盖 ${this.weekTotals.recordDays} 天`;
+  }
+
+  private targetCalories(): number {
+    return MockData.mealPlan.assessment.target.dailyCalories * this.scopeFactor();
+  }
+
+  private targetProtein(): number {
+    return MockData.mealPlan.assessment.target.proteinGram * this.scopeFactor();
+  }
+
+  private targetFat(): number {
+    return MockData.mealPlan.assessment.target.fatGram * this.scopeFactor();
+  }
+
+  private targetCarbs(): number {
+    return MockData.mealPlan.assessment.target.carbohydrateGram * this.scopeFactor();
+  }
+
+  private scopeFactor(): number {
+    return this.activeScope === 0 ? 1 : this.weekElapsedDays();
+  }
+
+  private weekElapsedDays(): number {
+    const today = new Date();
+    const weekday = today.getDay();
+    return weekday === 0 ? 7 : weekday;
+  }
+
+  private macroTotal(): number {
+    const totals = this.activeTotals();
+    return totals.protein + totals.fat + totals.carbs;
+  }
+
+  private macroPercent(value: number): number {
+    const total = this.macroTotal();
+    if (total <= 0) {
+      return 0;
+    }
+    return Math.round(value * 100 / total);
+  }
+
+  private percent(value: number, target: number): number {
+    if (target <= 0) {
+      return 0;
+    }
+    return Math.min(100, Math.round(value * 100 / target));
+  }
+
+  private readNumber(value: string): number {
+    const numberValue = Number(value);
+    if (Number.isNaN(numberValue) || numberValue < 0) {
+      return 0;
+    }
+    return Math.round(numberValue);
   }
 
   private mealTypeValue(): MealType {
@@ -382,10 +918,72 @@ export struct InsightsPage {
     return MealType.LUNCH;
   }
 
-  private percent(value: number, target: number): number {
-    if (target <= 0) {
+  private mealIndexFromType(type: MealType): number {
+    if (type === MealType.BREAKFAST) {
       return 0;
     }
-    return Math.min(100, Math.round(value * 100 / target));
+    if (type === MealType.DINNER) {
+      return 2;
+    }
+    if (type === MealType.SNACK) {
+      return 3;
+    }
+    return 1;
+  }
+
+  private mealTypeName(type: MealType): string {
+    if (type === MealType.BREAKFAST) {
+      return '早餐';
+    }
+    if (type === MealType.DINNER) {
+      return '晚餐';
+    }
+    if (type === MealType.SNACK) {
+      return '加餐';
+    }
+    return '午餐';
+  }
+
+  private formatRecordTime(value: string): string {
+    if (value.length <= 16) {
+      return value.replace('T', ' ');
+    }
+    return value.substring(0, 16).replace('T', ' ');
+  }
+
+  private recordDateKey(record: DietRecord): string {
+    if (record.eatenAt.length >= 10) {
+      return record.eatenAt.substring(0, 10);
+    }
+    return '';
+  }
+
+  private weekStartKey(): string {
+    const today = new Date();
+    const weekday = today.getDay();
+    const offset = weekday === 0 ? 6 : weekday - 1;
+    const monday = new Date(today.getTime());
+    monday.setDate(today.getDate() - offset);
+    return this.dateKey(monday);
+  }
+
+  private dateKey(date: Date): string {
+    const month = this.pad2(date.getMonth() + 1);
+    const day = this.pad2(date.getDate());
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
+
+  private pad2(value: number): string {
+    return value < 10 ? `0${value}` : `${value}`;
+  }
+
+  private showError(message: string) {
+    this.message = message;
+    this.isError = true;
+  }
+
+  private clearMessage() {
+    this.message = '';
+    this.isError = false;
   }
 }
