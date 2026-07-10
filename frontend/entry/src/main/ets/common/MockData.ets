@@ -42,7 +42,9 @@ export class MockData {
         calories: 420,
         proteinGram: 28,
         fatGram: 12,
-        carbohydrateGram: 48
+        carbohydrateGram: 48,
+        difficulty: '简单',
+        cookTime: '10分钟'
       }
     ],
     lunch: [
@@ -57,7 +59,9 @@ export class MockData {
         calories: 560,
         proteinGram: 42,
         fatGram: 14,
-        carbohydrateGram: 66
+        carbohydrateGram: 66,
+        difficulty: '中等',
+        cookTime: '20分钟'
       }
     ],
     dinner: [
@@ -72,7 +76,9 @@ export class MockData {
         calories: 310,
         proteinGram: 24,
         fatGram: 12,
-        carbohydrateGram: 28
+        carbohydrateGram: 28,
+        difficulty: '简单',
+        cookTime: '15分钟'
       }
     ],
     snack: [
@@ -87,7 +93,9 @@ export class MockData {
         calories: 220,
         proteinGram: 14,
         fatGram: 12,
-        carbohydrateGram: 16
+        carbohydrateGram: 16,
+        difficulty: '简单',
+        cookTime: '5分钟'
       }
     ],
     estimatedIntake: {

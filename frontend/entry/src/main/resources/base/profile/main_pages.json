@@ -1,5 +1,9 @@
 {
   "src": [
-    "pages/Index"
+    "pages/Index",
+    "pages/RecipeDetailPage",
+    "pages/FavoritePage",
+    "pages/HistoryPage",
+    "pages/RecipeList"
   ]
 }

@@ -13,6 +13,10 @@ struct Index {
   @State currentUserId: string = '';
   @State currentUserName: string = '';
   @State panelMode: number = -1;
+
+  aboutToAppear() {
+    AppStorage.setOrCreate('favIds', []);
+  }
   @State loginUsername: string = '';
   @State loginPassword: string = '';
   @State registerUsername: string = '';

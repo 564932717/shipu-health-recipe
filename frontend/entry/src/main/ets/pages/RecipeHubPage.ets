@@ -1,6 +1,8 @@
-import { HealthProfile, MealPlan, MealType, Recipe } from '../common/Models';
+import { HealthProfile, MealPlan, Recipe, RecipeHistoryItem, RecipePageResponse } from '../common/Models';
 import { MockData } from '../common/MockData';
 import { ApiClient } from '../services/ApiClient';
+import { SortSelector } from './SortSelector';
+import router from '@ohos.router';
 
 @Component
 export struct RecipeHubPage {
@@ -8,10 +10,15 @@ export struct RecipeHubPage {
   @State recipes: Recipe[] = [];
   @State keyword: string = '';
   @State categoryIndex: number = 0;
-  @State selectedRecipe: Recipe | null = null;
-  @State favoriteIds: string[] = [];
+  @StorageLink('favIds') favoriteIds: string[] = [];
   @State historyNames: string[] = [];
   @State message: string = '';
+  @State currentPage: number = 1;
+  @State totalPages: number = 1;
+  @State total: number = 0;
+  @State @Watch('onSortChanged') sortType: string = 'default';
+  @State isLoading: boolean = false;
+  private pageSize: number = 4;
 
   aboutToAppear() {
     this.load();
@@ -20,13 +27,40 @@ export struct RecipeHubPage {
   async load() {
     const profile: HealthProfile = await ApiClient.getProfile(ApiClient.currentUserId);
     this.plan = await ApiClient.recommend(profile);
-    await this.search();
+    await this.loadRecipes();
     await this.loadUserRecipeState();
   }
 
-  async search() {
-    this.recipes = await ApiClient.searchRecipes(this.keyword, '', this.mealTypeValue());
-    this.message = this.recipes.length === 0 ? '没有找到匹配食谱，可换个关键词试试' : '';
+  onSortChanged() {
+    this.currentPage = 1;
+    this.loadRecipes();
+  }
+
+  async loadRecipes() {
+    this.isLoading = true;
+    const currentKeyword = this.keyword;
+    const currentSortType = this.sortType;
+    const currentMealType = this.mealTypeParam();
+    try {
+      const response: RecipePageResponse = await ApiClient.getRecipePage(
+        this.currentPage,
+        this.pageSize,
+        currentKeyword,
+        currentMealType,
+        currentSortType
+      );
+      this.recipes = response.data;
+      this.total = response.total;
+      this.totalPages = response.totalPages;
+      if (this.currentPage > this.totalPages) {
+        this.currentPage = Math.max(1, this.totalPages);
+      }
+      this.message = this.recipes.length === 0 ? '没有找到匹配食谱，可换个关键词试试' : '';
+    } catch (error) {
+      this.message = ApiClient.lastError.length > 0 ? ApiClient.lastError : '食谱加载失败';
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   async loadUserRecipeState() {
@@ -44,7 +78,9 @@ export struct RecipeHubPage {
         this.hero()
         this.recommendSection()
         this.searchSection()
-        this.detailSection()
+        this.sortSection()
+        this.recipeListSection()
+        this.paginationSection()
         this.favoriteSection()
       }
       .padding({ left: 16, right: 16, top: 18, bottom: 24 })
@@ -165,7 +201,8 @@ export struct RecipeHubPage {
           .backgroundColor('#156B45')
           .borderRadius(14)
           .onClick(async () => {
-            await this.search();
+            this.currentPage = 1;
+            await this.loadRecipes();
           })
       }
       .width('100%')
@@ -178,25 +215,18 @@ export struct RecipeHubPage {
         this.filterButton('加餐', 4)
       }
       .width('100%')
-
-      if (this.message.length > 0) {
-        Text(this.message)
-          .fontSize(13)
-          .fontColor('#8B5E22')
-          .padding(12)
-          .backgroundColor('#FFF4D5')
-          .borderRadius(10)
-          .width('100%')
-      }
-
-      ForEach(this.recipes, (recipe: Recipe) => {
-        this.recipeRow(recipe)
-      })
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
     .borderRadius(18)
     .width('100%')
+  }
+
+  @Builder
+  sortSection() {
+    SortSelector({ currentSort: this.sortType, onSortChange: (value: string) => {
+      this.sortType = value;
+    } })
   }
 
   @Builder
@@ -209,12 +239,51 @@ export struct RecipeHubPage {
       .borderRadius(16)
       .onClick(async () => {
         this.categoryIndex = index;
-        await this.search();
+        this.currentPage = 1;
+        await this.loadRecipes();
       })
   }
 
   @Builder
-  recipeRow(recipe: Recipe) {
+  recipeListSection() {
+    Column({ space: 12 }) {
+      if (this.total > 0) {
+        Text(`共 ${this.total} 道食谱 · 第 ${this.currentPage}/${this.totalPages} 页`)
+          .fontSize(13)
+          .fontColor('#657064')
+          .width('100%')
+      }
+
+      if (this.isLoading) {
+        LoadingProgress()
+          .width(36)
+          .height(36)
+          .color('#156B45')
+          .margin({ top: 12, bottom: 12 })
+      }
+
+      if (this.message.length > 0) {
+        Text(this.message)
+          .fontSize(13)
+          .fontColor('#8B5E22')
+          .padding(12)
+          .backgroundColor('#FFF4D5')
+          .borderRadius(10)
+          .width('100%')
+      }
+
+      ForEach(this.recipes, (recipe: Recipe) => {
+        this.recipeCard(recipe)
+      })
+    }
+    .padding(16)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(18)
+    .width('100%')
+  }
+
+  @Builder
+  recipeCard(recipe: Recipe) {
     Column({ space: 8 }) {
       Row() {
         Column({ space: 4 }) {
@@ -222,7 +291,7 @@ export struct RecipeHubPage {
             .fontSize(17)
             .fontWeight(FontWeight.Bold)
             .fontColor('#071725')
-          Text(`${recipe.category} · ${recipe.calories} 千卡 · ${recipe.tags.join(' / ')}`)
+          Text(`${recipe.tags.join(' / ')}`)
             .fontSize(12)
             .fontColor('#657064')
         }
@@ -240,11 +309,22 @@ export struct RecipeHubPage {
           })
       }
       .width('100%')
+      .justifyContent(FlexAlign.SpaceBetween)
+      .alignItems(VerticalAlign.Center)
+
+      Row({ space: 8 }) {
+        this.nutritionBadge('热量', recipe.calories, '千卡', '#F8DD77')
+        this.nutritionBadge('蛋白质', recipe.proteinGram, 'g', '#A8D9A1')
+        this.nutritionBadge('脂肪', recipe.fatGram, 'g', '#E7B4C8')
+        this.nutritionBadge('碳水', recipe.carbohydrateGram, 'g', '#93BFE8')
+      }
 
       Text(`食材：${recipe.ingredients.join('、')}`)
         .fontSize(13)
         .fontColor('#405146')
         .width('100%')
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
     .padding(13)
     .backgroundColor('#F8FAF5')
@@ -256,65 +336,88 @@ export struct RecipeHubPage {
   }
 
   @Builder
-  detailSection() {
-    if (this.selectedRecipe != null) {
-      Column({ space: 10 }) {
-        Text('食谱详情')
-          .fontSize(19)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#071725')
-          .width('100%')
-        Text(this.selectedRecipe.name)
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#156B45')
-          .width('100%')
-        Text(`适用：${this.selectedRecipe.category} · ${this.selectedRecipe.tags.join('、')}`)
-          .fontSize(13)
-          .fontColor('#657064')
-          .width('100%')
-        this.nutritionLine('热量', this.selectedRecipe.calories, '千卡', '#F8DD77')
-        this.nutritionLine('蛋白质', this.selectedRecipe.proteinGram, 'g', '#A8D9A1')
-        this.nutritionLine('脂肪', this.selectedRecipe.fatGram, 'g', '#E7B4C8')
-        this.nutritionLine('碳水', this.selectedRecipe.carbohydrateGram, 'g', '#93BFE8')
-        Text(`制作步骤：${this.selectedRecipe.steps.join('；')}`)
-          .fontSize(13)
-          .fontColor('#405146')
-          .lineHeight(20)
-          .width('100%')
-      }
-      .padding(16)
-      .backgroundColor('#FFFFFF')
-      .borderRadius(18)
-      .width('100%')
+  nutritionBadge(label: string, value: number, unit: string, color: string) {
+    Row({ space: 4 }) {
+      Text(label)
+        .fontSize(11)
+        .fontColor('#657064')
+      Text(`${value}${unit}`)
+        .fontSize(12)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#071725')
     }
+    .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+    .backgroundColor(color)
+    .borderRadius(8)
   }
 
   @Builder
-  nutritionLine(label: string, value: number, unit: string, color: string) {
-    Row() {
-      Text(label)
-        .fontSize(13)
-        .fontColor('#657064')
-        .width(58)
-      Row()
-        .height(10)
-        .layoutWeight(1)
-        .backgroundColor(color)
-        .borderRadius(5)
-      Text(`${value}${unit}`)
-        .fontSize(13)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#071725')
-        .width(62)
-        .textAlign(TextAlign.End)
+  paginationSection() {
+    Column() {
+      if (this.totalPages > 1) {
+        Row({ space: 4 }) {
+          Button('上一页')
+            .height(38)
+            .fontSize(13)
+            .fontColor(this.currentPage <= 1 ? '#B8C4B6' : '#405146')
+            .backgroundColor(this.currentPage <= 1 ? '#F0F4ED' : '#EEF4EA')
+            .borderRadius(19)
+            .padding({ left: 14, right: 14 })
+            .enabled(this.currentPage > 1 && !this.isLoading)
+            .opacity(this.currentPage <= 1 ? 0.5 : 1.0)
+            .onClick(async () => {
+              if (this.currentPage > 1 && !this.isLoading) {
+                this.currentPage--;
+                await this.loadRecipes();
+              }
+            })
+
+          ForEach(this.pageNumbers(), (num: number) => {
+            Button(`${num}`)
+              .height(38)
+              .fontSize(14)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(num === this.currentPage ? '#FFF6D5' : '#405146')
+              .backgroundColor(num === this.currentPage ? '#156B45' : Color.Transparent)
+              .borderRadius(8)
+              .padding({ left: 14, right: 14 })
+              .enabled(!this.isLoading)
+              .onClick(async () => {
+                if (num !== this.currentPage && !this.isLoading) {
+                  this.currentPage = num;
+                  await this.loadRecipes();
+                }
+              })
+          })
+
+          Button('下一页')
+            .height(38)
+            .fontSize(13)
+            .fontColor(this.currentPage >= this.totalPages ? '#B8C4B6' : '#405146')
+            .backgroundColor(this.currentPage >= this.totalPages ? '#F0F4ED' : '#EEF4EA')
+            .borderRadius(19)
+            .padding({ left: 14, right: 14 })
+            .enabled(this.currentPage < this.totalPages && !this.isLoading)
+            .opacity(this.currentPage >= this.totalPages ? 0.5 : 1.0)
+            .onClick(async () => {
+              if (this.currentPage < this.totalPages && !this.isLoading) {
+                this.currentPage++;
+                await this.loadRecipes();
+              }
+            })
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+        .alignItems(VerticalAlign.Center)
+        .padding({ top: 8, bottom: 8 })
+      }
     }
     .width('100%')
   }
 
   @Builder
   favoriteSection() {
-    Column({ space: 8 }) {
+    Column({ space: 12 }) {
       Text('收藏与历史')
         .fontSize(19)
         .fontWeight(FontWeight.Bold)
@@ -328,6 +431,29 @@ export struct RecipeHubPage {
         .fontSize(13)
         .fontColor('#657064')
         .width('100%')
+      Row({ space: 10 }) {
+        Button('查看全部收藏')
+          .height(38)
+          .fontSize(13)
+          .fontColor('#156B45')
+          .backgroundColor('#E8F4EC')
+          .borderRadius(19)
+          .layoutWeight(1)
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/FavoritePage' });
+          })
+        Button('查看全部历史')
+          .height(38)
+          .fontSize(13)
+          .fontColor('#071725')
+          .backgroundColor('#F4E8BA')
+          .borderRadius(19)
+          .layoutWeight(1)
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/HistoryPage' });
+          })
+      }
+      .width('100%')
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
@@ -335,24 +461,36 @@ export struct RecipeHubPage {
     .width('100%')
   }
 
-  private mealTypeValue(): MealType | undefined {
+  private mealTypeParam(): string {
     if (this.categoryIndex === 1) {
-      return MealType.BREAKFAST;
+      return 'BREAKFAST';
     }
     if (this.categoryIndex === 2) {
-      return MealType.LUNCH;
+      return 'LUNCH';
     }
     if (this.categoryIndex === 3) {
-      return MealType.DINNER;
+      return 'DINNER';
     }
     if (this.categoryIndex === 4) {
-      return MealType.SNACK;
+      return 'SNACK';
     }
-    return undefined;
+    return '';
+  }
+
+  private pageNumbers(): number[] {
+    const pages: number[] = [];
+    let start = Math.max(1, this.currentPage - 1);
+    let end = Math.min(this.totalPages, start + 3);
+    if (end - start < 3) {
+      start = Math.max(1, end - 3);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
   }
 
   private async openRecipe(recipe: Recipe) {
-    this.selectedRecipe = recipe;
     this.mergeHistoryName(recipe.name);
     try {
       await ApiClient.addRecipeHistory(ApiClient.currentUserId, recipe.id);
@@ -360,6 +498,7 @@ export struct RecipeHubPage {
     } catch (error) {
       this.message = ApiClient.lastError.length > 0 ? ApiClient.lastError : '浏览历史同步失败';
     }
+    router.pushUrl({ url: 'pages/RecipeDetailPage', params: { recipeId: recipe.id } });
   }
 
   private isFavorite(id: string): boolean {
@@ -393,12 +532,14 @@ export struct RecipeHubPage {
 
   private async refreshFavoriteState() {
     const favorites = await ApiClient.listFavoriteRecipes(ApiClient.currentUserId);
-    this.favoriteIds = this.recipeIds(favorites);
+    const ids: string[] = [];
+    favorites.forEach((r: Recipe) => ids.push(r.id));
+    AppStorage.setOrCreate('favIds', ids);
   }
 
   private async refreshHistoryState() {
     const history = await ApiClient.listRecipeHistory(ApiClient.currentUserId);
-    this.historyNames = this.recipeNames(history, 3);
+    this.historyNames = this.historyItemNames(history, 3);
   }
 
   private mergeHistoryName(name: string) {
@@ -407,19 +548,11 @@ export struct RecipeHubPage {
     this.historyNames = history.slice(0, 3);
   }
 
-  private recipeIds(recipes: Recipe[]): string[] {
-    const ids: string[] = [];
-    recipes.forEach((recipe: Recipe) => {
-      ids.push(recipe.id);
-    });
-    return ids;
-  }
-
-  private recipeNames(recipes: Recipe[], limit: number): string[] {
+  private historyItemNames(items: RecipeHistoryItem[], limit: number): string[] {
     const names: string[] = [];
-    const count = recipes.length > limit ? limit : recipes.length;
+    const count = items.length > limit ? limit : items.length;
     for (let index = 0; index < count; index++) {
-      names.push(recipes[index].name);
+      names.push(items[index].recipe.name);
     }
     return names;
   }

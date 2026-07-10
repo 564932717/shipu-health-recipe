@@ -85,6 +85,21 @@ export interface Recipe {
   proteinGram: number;
   fatGram: number;
   carbohydrateGram: number;
+  difficulty: string;
+  cookTime: string;
+}
+
+export interface RecipePageResponse {
+  data: Recipe[];
+  total: number;
+  page: number;
+  size: number;
+  totalPages: number;
+}
+
+export interface RecipeHistoryItem {
+  recipe: Recipe;
+  lastViewedAt: string;
 }
 
 export interface MealPlan {

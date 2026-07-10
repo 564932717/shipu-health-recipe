@@ -3,6 +3,7 @@ package com.xd.healthrecipe.web;
 import com.xd.healthrecipe.dto.ApiResponse;
 import com.xd.healthrecipe.dto.ChangePasswordRequest;
 import com.xd.healthrecipe.dto.LoginRequest;
+import com.xd.healthrecipe.dto.RecipeHistoryItem;
 import com.xd.healthrecipe.dto.RegisterRequest;
 import com.xd.healthrecipe.dto.SyncSettingRequest;
 import com.xd.healthrecipe.dto.UserCenterSummary;
@@ -69,13 +70,20 @@ public class UserController {
     }
 
     @GetMapping("/{userId}/recipe-history")
-    public ApiResponse<List<Recipe>> history(@PathVariable String userId) {
-        return ApiResponse.ok(userCenterService.history(userId));
+    public ApiResponse<List<RecipeHistoryItem>> history(@PathVariable String userId) {
+        return ApiResponse.ok(userCenterService.historyItems(userId));
     }
 
     @PostMapping("/{userId}/recipe-history/{recipeId}")
-    public ApiResponse<List<Recipe>> addHistory(@PathVariable String userId, @PathVariable String recipeId) {
-        return ApiResponse.ok(userCenterService.addHistory(userId, recipeId));
+    public ApiResponse<List<RecipeHistoryItem>> addHistory(@PathVariable String userId, @PathVariable String recipeId) {
+        userCenterService.addHistory(userId, recipeId);
+        return ApiResponse.ok(userCenterService.historyItems(userId));
+    }
+
+    @DeleteMapping("/{userId}/recipe-history")
+    public ApiResponse<Void> clearHistory(@PathVariable String userId) {
+        userCenterService.clearHistory(userId);
+        return ApiResponse.ok(null);
     }
 
     @PostMapping("/{userId}/sync-setting")

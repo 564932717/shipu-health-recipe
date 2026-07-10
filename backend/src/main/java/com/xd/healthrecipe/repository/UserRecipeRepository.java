@@ -3,6 +3,9 @@ package com.xd.healthrecipe.repository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 @Repository
@@ -61,6 +64,28 @@ public class UserRecipeRepository {
                         """,
                 userId,
                 recipeId);
+        trimHistory(userId, 99);
+    }
+
+    public void clearHistory(String userId) {
+        jdbcTemplate.update("DELETE FROM recipe_history WHERE user_id = ?", userId);
+    }
+
+    private void trimHistory(String userId, int maxRecords) {
+        int count = historyCount(userId);
+        if (count > maxRecords) {
+            jdbcTemplate.update("""
+                    DELETE FROM recipe_history
+                    WHERE id IN (
+                        SELECT id FROM (
+                            SELECT id FROM recipe_history
+                            WHERE user_id = ?
+                            ORDER BY last_viewed_at ASC
+                            LIMIT ?
+                        ) AS tmp
+                    )
+                    """, userId, count - maxRecords);
+        }
     }
 
     public List<String> recentHistoryIds(String userId, int limit) {
@@ -72,6 +97,22 @@ public class UserRecipeRepository {
                         LIMIT ?
                         """,
                 String.class,
+                userId,
+                Math.max(1, limit));
+    }
+
+    public List<String[]> recentHistoryWithTime(String userId, int limit) {
+        return jdbcTemplate.query("""
+                        SELECT recipe_id, last_viewed_at
+                        FROM recipe_history
+                        WHERE user_id = ?
+                        ORDER BY last_viewed_at DESC
+                        LIMIT ?
+                        """,
+                (ResultSet rs, int rowNum) -> new String[]{
+                        rs.getString("recipe_id"),
+                        rs.getString("last_viewed_at")
+                },
                 userId,
                 Math.max(1, limit));
     }

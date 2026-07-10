@@ -2,12 +2,14 @@ package com.xd.healthrecipe.service;
 
 import com.xd.healthrecipe.domain.Recipe;
 import com.xd.healthrecipe.domain.UserAccount;
+import com.xd.healthrecipe.dto.RecipeHistoryItem;
 import com.xd.healthrecipe.dto.UserCenterSummary;
 import com.xd.healthrecipe.repository.RecipeRepository;
 import com.xd.healthrecipe.repository.UserRecipeRepository;
 import com.xd.healthrecipe.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -67,9 +69,26 @@ public class UserCenterService {
         return history(userId);
     }
 
+    public List<RecipeHistoryItem> historyItems(String userId) {
+        requireUser(userId);
+        List<String[]> entries = userRecipeRepository.recentHistoryWithTime(userId, 99);
+        List<RecipeHistoryItem> items = new ArrayList<>();
+        for (String[] entry : entries) {
+            recipeRepository.findById(entry[0]).ifPresent(recipe ->
+                    items.add(new RecipeHistoryItem(recipe, entry[1]))
+            );
+        }
+        return items;
+    }
+
     public List<Recipe> history(String userId) {
         requireUser(userId);
         return recipesByIds(userRecipeRepository.recentHistoryIds(userId, 10));
+    }
+
+    public void clearHistory(String userId) {
+        requireUser(userId);
+        userRecipeRepository.clearHistory(userId);
     }
 
     public boolean updateSyncSetting(String userId, boolean syncEnabled) {

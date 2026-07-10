@@ -1,5 +1,6 @@
 import { ApiClient } from '../services/ApiClient';
-import { ChangePasswordRequest, Recipe, SyncSettingRequest, UserCenterSummary } from '../common/Models';
+import { ChangePasswordRequest, Recipe, RecipeHistoryItem, SyncSettingRequest, UserCenterSummary } from '../common/Models';
+import router from '@ohos.router';
 
 @Component
 export struct UserCenterPage {
@@ -15,7 +16,7 @@ export struct UserCenterPage {
     recommendedRecipeName: '糙米鸡胸蔬菜碗'
   };
   @State favoriteRecipes: Recipe[] = [];
-  @State historyRecipes: Recipe[] = [];
+  @State historyRecipes: RecipeHistoryItem[] = [];
   @State oldPassword: string = '';
   @State newPassword: string = '';
   @State confirmPassword: string = '';
@@ -181,10 +182,33 @@ export struct UserCenterPage {
         .fontSize(13)
         .fontColor('#405146')
         .width('100%')
-      Text(this.historyRecipes.length === 0 ? '暂无浏览历史' : `最近查看：${this.recipeNames(this.historyRecipes, 3)}`)
+      Text(this.historyRecipes.length === 0 ? '暂无浏览历史' : `最近查看：${this.historyItemNames(this.historyRecipes, 3)}`)
         .fontSize(13)
         .fontColor('#405146')
         .width('100%')
+      Row({ space: 10 }) {
+        Button('查看收藏')
+          .height(36)
+          .fontSize(13)
+          .fontColor('#156B45')
+          .backgroundColor('#E8F4EC')
+          .borderRadius(18)
+          .layoutWeight(1)
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/FavoritePage' });
+          })
+        Button('查看历史')
+          .height(36)
+          .fontSize(13)
+          .fontColor('#071725')
+          .backgroundColor('#F4E8BA')
+          .borderRadius(18)
+          .layoutWeight(1)
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/HistoryPage' });
+          })
+      }
+      .width('100%')
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
@@ -347,6 +371,15 @@ export struct UserCenterPage {
     return names.join('、');
   }
 
+  private historyItemNames(items: RecipeHistoryItem[], limit: number): string {
+    const names: string[] = [];
+    const count = items.length > limit ? limit : items.length;
+    for (let index = 0; index < count; index++) {
+      names.push(items[index].recipe.name);
+    }
+    return names.join('、');
+  }
+
   private textValue(value: string, fallback: string): string {
     if (value != null && value.length > 0) {
       return value;
@@ -362,12 +395,12 @@ export struct UserCenterPage {
     return parsed;
   }
 
-  private recommendedRecipeName(value: string, history: Recipe[]): string {
+  private recommendedRecipeName(value: string, history: RecipeHistoryItem[]): string {
     if (value != null && value.length > 0) {
       return value;
     }
     if (history.length > 0) {
-      return history[0].name;
+      return history[0].recipe.name;
     }
     return this.summary.recommendedRecipeName;
   }

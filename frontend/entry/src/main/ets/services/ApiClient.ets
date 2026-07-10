@@ -9,6 +9,8 @@ import {
   MealType,
   NutritionSummary,
   Recipe,
+  RecipeHistoryItem,
+  RecipePageResponse,
   RegisterRequest,
   SyncSettingRequest,
   UserCenterSummary,
@@ -38,7 +40,7 @@ interface MockUserRecipeState {
 }
 
 export class ApiClient {
-  static baseUrl: string = 'http://10.198.14.1:8080';
+  static baseUrl: string = 'http://10.198.33.130:8080';
   static useMock: boolean = false;
   static fallbackToMockAuth: boolean = true;
   static currentUserId: string = 'demo';
@@ -215,12 +217,19 @@ export class ApiClient {
     await ApiClient.request<Object>('DELETE', `/api/users/${userId}/favorites/${recipeId}`);
   }
 
-  static async listRecipeHistory(userId: string): Promise<Recipe[]> {
+  static async listRecipeHistory(userId: string): Promise<RecipeHistoryItem[]> {
     if (ApiClient.useMock) {
       const state = ApiClient.getMockUserRecipeState(userId);
-      return ApiClient.findMockRecipesByIds(state.historyIds);
+      const items: RecipeHistoryItem[] = [];
+      for (let i = 0; i < state.historyIds.length; i++) {
+        const recipe = ApiClient.findMockRecipe(state.historyIds[i]);
+        if (recipe != null) {
+          items.push({ recipe: recipe, lastViewedAt: new Date().toISOString() });
+        }
+      }
+      return items;
     }
-    const result = await ApiClient.request<Recipe[]>('GET', `/api/users/${userId}/recipe-history`);
+    const result = await ApiClient.request<RecipeHistoryItem[]>('GET', `/api/users/${userId}/recipe-history`);
     return result.data;
   }
 
@@ -244,6 +253,16 @@ export class ApiClient {
       return;
     }
     await ApiClient.request<Object>('POST', `/api/users/${userId}/sync-setting`, request);
+  }
+
+  static async clearRecipeHistory(userId: string): Promise<void> {
+    if (ApiClient.useMock) {
+      const state = ApiClient.getMockUserRecipeState(userId);
+      state.historyIds = [];
+      ApiClient.lastError = '';
+      return;
+    }
+    await ApiClient.request<Object>('DELETE', `/api/users/${userId}/recipe-history`);
   }
 
   static async getProfile(userId: string): Promise<HealthProfile> {
@@ -296,6 +315,37 @@ export class ApiClient {
     }
     const query = params.length > 0 ? `?${params.join('&')}` : '';
     const result = await ApiClient.request<Recipe[]>('GET', `/api/recipes${query}`);
+    return result.data;
+  }
+
+  static async getRecipeDetail(recipeId: string): Promise<Recipe> {
+    if (ApiClient.useMock) {
+      const recipe = ApiClient.findMockRecipe(recipeId);
+      if (recipe == null) {
+        ApiClient.lastError = '食谱不存在';
+        throw new Error(ApiClient.lastError);
+      }
+      return recipe;
+    }
+    const result = await ApiClient.request<Recipe>('GET', `/api/recipes/${recipeId}`);
+    return result.data;
+  }
+
+  static async getRecipePage(page: number, size: number, keyword?: string, mealType?: string, sort?: string): Promise<RecipePageResponse> {
+    const params: string[] = [];
+    params.push(`page=${page}`);
+    params.push(`size=${size}`);
+    if (keyword != null && keyword.trim().length > 0) {
+      params.push(`keyword=${encodeURIComponent(keyword.trim())}`);
+    }
+    if (mealType != null && mealType.length > 0) {
+      params.push(`mealType=${mealType}`);
+    }
+    if (sort != null && sort.length > 0) {
+      params.push(`sort=${sort}`);
+    }
+    const query = `?${params.join('&')}`;
+    const result = await ApiClient.request<RecipePageResponse>('GET', `/api/recipes/page${query}`);
     return result.data;
   }
 
@@ -505,7 +555,9 @@ export class ApiClient {
         calories: 460,
         proteinGram: 24,
         fatGram: 18,
-        carbohydrateGram: 52
+        carbohydrateGram: 52,
+        difficulty: '简单',
+        cookTime: '10分钟'
       },
       {
         id: 'L002',
@@ -518,7 +570,9 @@ export class ApiClient {
         calories: 680,
         proteinGram: 46,
         fatGram: 24,
-        carbohydrateGram: 68
+        carbohydrateGram: 68,
+        difficulty: '中等',
+        cookTime: '25分钟'
       },
       {
         id: 'D003',
@@ -531,7 +585,9 @@ export class ApiClient {
         calories: 360,
         proteinGram: 34,
         fatGram: 8,
-        carbohydrateGram: 32
+        carbohydrateGram: 32,
+        difficulty: '简单',
+        cookTime: '15分钟'
       },
       {
         id: 'S002',
@@ -544,7 +600,9 @@ export class ApiClient {
         calories: 240,
         proteinGram: 12,
         fatGram: 6,
-        carbohydrateGram: 38
+        carbohydrateGram: 38,
+        difficulty: '简单',
+        cookTime: '5分钟'
       }
     ];
   }

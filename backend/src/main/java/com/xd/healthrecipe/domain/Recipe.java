@@ -15,7 +15,9 @@ public record Recipe(
         int calories,
         int proteinGram,
         int fatGram,
-        int carbohydrateGram
+        int carbohydrateGram,
+        String difficulty,
+        String cookTime
 ) {
     public boolean matchesGoal(HealthGoal goal) {
         return suitableGoals.contains(goal) || suitableGoals.contains(HealthGoal.BALANCED);

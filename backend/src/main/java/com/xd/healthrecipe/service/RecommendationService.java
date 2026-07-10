@@ -7,27 +7,39 @@ import com.xd.healthrecipe.domain.MealPlan;
 import com.xd.healthrecipe.domain.MealType;
 import com.xd.healthrecipe.domain.NutritionTarget;
 import com.xd.healthrecipe.domain.Recipe;
+import com.xd.healthrecipe.repository.RecipeRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Random;
 
 @Service
 public class RecommendationService {
     private final HealthAssessmentService assessmentService;
     private final RecipeCatalogService recipeCatalogService;
+    private final RecipeRepository recipeRepository;
+    private final Random random = new Random();
 
-    public RecommendationService(HealthAssessmentService assessmentService, RecipeCatalogService recipeCatalogService) {
+    public RecommendationService(HealthAssessmentService assessmentService,
+                                  RecipeCatalogService recipeCatalogService,
+                                  RecipeRepository recipeRepository) {
         this.assessmentService = assessmentService;
         this.recipeCatalogService = recipeCatalogService;
+        this.recipeRepository = recipeRepository;
     }
 
     public MealPlan recommend(HealthProfile profile) {
         HealthAssessment assessment = assessmentService.evaluate(profile);
         HealthGoal goal = profile.goal() == null ? HealthGoal.BALANCED : profile.goal();
-        List<Recipe> breakfast = pick(goal, MealType.BREAKFAST, profile);
-        List<Recipe> lunch = pick(goal, MealType.LUNCH, profile);
-        List<Recipe> dinner = pick(goal, MealType.DINNER, profile);
-        List<Recipe> snack = pick(goal, MealType.SNACK, profile);
+
+        List<Recipe> breakfast = pickBreakfast(goal, profile);
+        List<Recipe> lunch = pickLunch(goal, profile);
+        List<Recipe> dinner = pickDinner(goal, profile);
+        List<Recipe> snack = pickSnack(goal, profile);
+
         NutritionTarget intake = sum(breakfast, lunch, dinner, snack);
         return new MealPlan(
                 assessment,
@@ -40,14 +52,62 @@ public class RecommendationService {
         );
     }
 
-    private List<Recipe> pick(HealthGoal goal, MealType mealType, HealthProfile profile) {
-        List<Recipe> filtered = recipeCatalogService.search(null, goal, mealType).stream()
+    private List<Recipe> pickBreakfast(HealthGoal goal, HealthProfile profile) {
+        List<Recipe> candidates = recipeRepository.findByGoal(goal, MealType.BREAKFAST);
+        candidates = filterTaboos(candidates, profile);
+        if (candidates.isEmpty()) {
+            candidates = recipeRepository.findByGoal(HealthGoal.BALANCED, MealType.BREAKFAST);
+            candidates = filterTaboos(candidates, profile);
+        }
+        candidates.sort(Comparator.comparingInt(Recipe::proteinGram).reversed());
+        return pickRandom(candidates, 1);
+    }
+
+    private List<Recipe> pickLunch(HealthGoal goal, HealthProfile profile) {
+        List<Recipe> candidates = recipeRepository.findByGoal(goal, MealType.LUNCH);
+        candidates = filterTaboos(candidates, profile);
+        if (candidates.isEmpty()) {
+            candidates = recipeRepository.findByGoal(HealthGoal.BALANCED, MealType.LUNCH);
+            candidates = filterTaboos(candidates, profile);
+        }
+        candidates.sort(Comparator.comparingInt(Recipe::calories).reversed());
+        return pickRandom(candidates, 1);
+    }
+
+    private List<Recipe> pickDinner(HealthGoal goal, HealthProfile profile) {
+        List<Recipe> candidates = recipeRepository.findByGoal(goal, MealType.DINNER);
+        candidates = filterTaboos(candidates, profile);
+        if (candidates.isEmpty()) {
+            candidates = recipeRepository.findByGoal(HealthGoal.BALANCED, MealType.DINNER);
+            candidates = filterTaboos(candidates, profile);
+        }
+        candidates.sort(Comparator.comparingInt(r -> r.fatGram()));
+        return pickRandom(candidates, 1);
+    }
+
+    private List<Recipe> pickSnack(HealthGoal goal, HealthProfile profile) {
+        List<Recipe> candidates = recipeRepository.findByGoal(goal, MealType.SNACK);
+        candidates = filterTaboos(candidates, profile);
+        if (candidates.isEmpty()) {
+            candidates = recipeRepository.findByGoal(HealthGoal.BALANCED, MealType.SNACK);
+            candidates = filterTaboos(candidates, profile);
+        }
+        candidates.sort(Comparator.comparingInt(Recipe::proteinGram).reversed());
+        return pickRandom(candidates, 1);
+    }
+
+    private List<Recipe> filterTaboos(List<Recipe> recipes, HealthProfile profile) {
+        return recipes.stream()
                 .filter(recipe -> !recipe.containsAny(profile.taboos()))
                 .toList();
-        if (filtered.isEmpty()) {
-            filtered = recipeCatalogService.search(null, HealthGoal.BALANCED, mealType);
+    }
+
+    private List<Recipe> pickRandom(List<Recipe> list, int count) {
+        if (list.isEmpty()) {
+            return List.of();
         }
-        return filtered.stream().limit(1).toList();
+        Collections.shuffle(list, random);
+        return list.stream().limit(count).toList();
     }
 
     @SafeVarargs
