@@ -41,7 +41,7 @@ interface MockUserRecipeState {
 }
 
 export class ApiClient {
-  static baseUrl: string = 'http://10.198.243.132:8080';
+  static baseUrl: string = 'http://10.198.98.58:8080';
   static useMock: boolean = false;
   static fallbackToMockAuth: boolean = true;
   static currentUserId: string = 'demo';

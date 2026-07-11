@@ -65,28 +65,23 @@ struct Index {
   @Builder
   loginScreen() {
     Stack({ alignContent: Alignment.Top }) {
-      Image($r('app.media.login_hero'))
-        .width('100%')
-        .height('100%')
-        .objectFit(ImageFit.Fill)
-
       Column() {
         Blank()
-          .height('50.8%')
+          .layoutWeight(1)
 
-        this.entryButton('登录', '已有账号，点击输入账号和密码')
-
-        Blank()
-          .height('3.6%')
-
-        this.entryButton('注册', '第一次使用，点击创建账号')
+        Column({ space: 22 }) {
+          this.loginHero()
+          this.entryPanel()
+        }
+        .width('100%')
 
         Blank()
           .layoutWeight(1)
       }
       .width('100%')
       .height('100%')
-      .alignItems(HorizontalAlign.Center)
+      .padding({ left: 22, right: 22, top: 54, bottom: 42 })
+      .backgroundColor('#F4F7F1')
 
       if (this.panelMode >= 0) {
         this.authPanel()
@@ -97,42 +92,97 @@ struct Index {
   }
 
   @Builder
-  entryButton(title: string, subtitle: string) {
-    Row() {
-      Column({ space: 2 }) {
-        Text(title)
-          .fontSize(25)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#FFF6D5')
-        Text(subtitle)
-          .fontSize(12)
-          .fontColor('#FFE59E')
-      }
-      .alignItems(HorizontalAlign.Start)
+  loginHero() {
+    Column({ space: 12 }) {
+      Text('个性化健康食谱规划系统')
+        .fontSize(28)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#071725')
+        .textAlign(TextAlign.Center)
+        .width('100%')
 
-      Blank()
-
-      Text('>')
-        .fontSize(26)
-        .fontColor('#FFF6D5')
+      Text('登录后继续记录饮食、管理食谱与查看营养统计')
+        .fontSize(14)
+        .fontColor('#657064')
+        .textAlign(TextAlign.Center)
+        .width('100%')
     }
-    .width('86%')
-    .height(70)
-    .padding({ left: 28, right: 24 })
-    .backgroundColor('#071725E8')
-    .borderRadius(35)
-    .onClick(() => {
-      this.openPanel(title === '登录' ? 0 : 1);
-    })
+    .alignItems(HorizontalAlign.Center)
+    .width('100%')
   }
 
+  @Builder
+  entryPanel() {
+    Column({ space: 14 }) {
+      Column({ space: 6 }) {
+        Text('欢迎使用')
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#071725')
+          .width('100%')
+        Text('请选择登录或注册账号')
+          .fontSize(13)
+          .fontColor('#657064')
+          .width('100%')
+      }
+      .alignItems(HorizontalAlign.Start)
+      .width('100%')
+      .margin({ bottom: 4 })
+
+      this.entryButton('登录', '已有账号，输入账号和密码', 0, true)
+      this.entryButton('注册', '第一次使用，创建新账号', 1, false)
+    }
+    .padding({ left: 20, right: 20, top: 22, bottom: 22 })
+    .backgroundColor('#FFFFFF')
+    .border({ width: 1, color: '#E7EFE4' })
+    .borderRadius(24)
+    .width('100%')
+  }
+
+  @Builder
+  entryButton(title: string, subtitle: string, mode: number, primary: boolean) {
+    Row() {
+      Column({ space: 4 }) {
+        Text(title)
+          .fontSize(18)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(primary ? '#FFF6D5' : '#071725')
+          .maxLines(1)
+        Text(subtitle)
+          .fontSize(12)
+          .fontColor(primary ? '#DDEBDD' : '#657064')
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .justifyContent(FlexAlign.Center)
+      .layoutWeight(1)
+      .height('100%')
+
+      Text('>')
+        .fontSize(25)
+        .fontColor(primary ? '#FFF6D5' : '#156B45')
+        .width(24)
+        .textAlign(TextAlign.Center)
+    }
+    .width('100%')
+    .height(62)
+    .padding({ left: 16, right: 14 })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(primary ? '#071725' : '#F8FAF5')
+    .border({ width: primary ? 0 : 1, color: primary ? '#071725' : '#E7EFE4' })
+    .borderRadius(16)
+    .onClick(() => {
+      this.openPanel(mode);
+    })
+  }
   @Builder
   authPanel() {
     Stack({ alignContent: Alignment.Center }) {
       Text('')
         .width('100%')
         .height('100%')
-        .backgroundColor('#07172599')
+        .backgroundColor('#07172580')
 
       Column({ space: 14 }) {
         Row() {
@@ -148,12 +198,15 @@ struct Index {
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
 
-          Button('X')
+          Text('×')
             .width(36)
             .height(36)
-            .fontSize(15)
-            .fontColor('#071725')
-            .backgroundColor('#F4E8BA')
+            .fontSize(22)
+            .lineHeight(36)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#156B45')
+            .textAlign(TextAlign.Center)
+            .backgroundColor('#E8F4EC')
             .borderRadius(18)
             .onClick(() => {
               this.closePanel();
@@ -169,10 +222,10 @@ struct Index {
               .height(48)
               .fontSize(16)
               .fontColor('#071725')
-              .placeholderColor('#8F8A79')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 1, color: '#E7D797' })
-              .borderRadius(8)
+              .placeholderColor('#657064')
+              .backgroundColor('#F8FAF5')
+              .border({ width: 1, color: '#E7EFE4' })
+              .borderRadius(14)
               .padding({ left: 16, right: 16 })
               .onChange(() => {
                 this.clearMessages();
@@ -184,10 +237,10 @@ struct Index {
               .height(48)
               .fontSize(16)
               .fontColor('#071725')
-              .placeholderColor('#8F8A79')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 1, color: '#E7D797' })
-              .borderRadius(8)
+              .placeholderColor('#657064')
+              .backgroundColor('#F8FAF5')
+              .border({ width: 1, color: '#E7EFE4' })
+              .borderRadius(14)
               .padding({ left: 16, right: 16 })
               .showPasswordIcon(false)
               .onChange(() => {
@@ -203,10 +256,10 @@ struct Index {
               .height(48)
               .fontSize(16)
               .fontColor('#071725')
-              .placeholderColor('#8F8A79')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 1, color: '#E7D797' })
-              .borderRadius(8)
+              .placeholderColor('#657064')
+              .backgroundColor('#F8FAF5')
+              .border({ width: 1, color: '#E7EFE4' })
+              .borderRadius(14)
               .padding({ left: 16, right: 16 })
               .onChange(() => {
                 this.clearMessages();
@@ -218,10 +271,10 @@ struct Index {
               .height(48)
               .fontSize(16)
               .fontColor('#071725')
-              .placeholderColor('#8F8A79')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 1, color: '#E7D797' })
-              .borderRadius(8)
+              .placeholderColor('#657064')
+              .backgroundColor('#F8FAF5')
+              .border({ width: 1, color: '#E7EFE4' })
+              .borderRadius(14)
               .padding({ left: 16, right: 16 })
               .showPasswordIcon(false)
               .onChange(() => {
@@ -234,10 +287,10 @@ struct Index {
               .height(48)
               .fontSize(16)
               .fontColor('#071725')
-              .placeholderColor('#8F8A79')
-              .backgroundColor('#FFFFFF')
-              .border({ width: 1, color: '#E7D797' })
-              .borderRadius(8)
+              .placeholderColor('#657064')
+              .backgroundColor('#F8FAF5')
+              .border({ width: 1, color: '#E7EFE4' })
+              .borderRadius(14)
               .padding({ left: 16, right: 16 })
               .showPasswordIcon(false)
               .onChange(() => {
@@ -252,7 +305,7 @@ struct Index {
             .height(34)
             .fontSize(13)
             .fontColor('#071725')
-            .backgroundColor('#FFF3C6')
+            .backgroundColor('#EEF4EA')
             .borderRadius(17)
             .onClick(() => {
               this.showPassword = !this.showPassword;
@@ -306,9 +359,9 @@ struct Index {
       }
       .width('84%')
       .padding(20)
-      .backgroundColor('#FFF9E3')
-      .border({ width: 1, color: '#F2D573' })
-      .borderRadius(8)
+      .backgroundColor('#FFFFFF')
+      .border({ width: 1, color: '#E7EFE4' })
+      .borderRadius(18)
     }
     .width('100%')
     .height('100%')
