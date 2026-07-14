@@ -23,6 +23,22 @@
         "startWindowIcon": "$media:app_icon"
       }
     ],
+    "extensionAbilities": [
+      {
+        "name": "HealthCardFormAbility",
+        "srcEntry": "./ets/widget/HealthCardFormAbility.ets",
+        "label": "$string:app_name",
+        "description": "$string:module_desc",
+        "type": "form",
+        "exported": true,
+        "metadata": [
+          {
+            "name": "ohos.extension.form",
+            "resource": "$profile:form_config"
+          }
+        ]
+      }
+    ],
     "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET"

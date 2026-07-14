@@ -8,6 +8,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -21,6 +24,16 @@ public class DietRecordService {
     }
 
     public DietRecord add(DietRecordRequest request) {
+        LocalDateTime eatenAt = parseEatenAt(request.eatenAt());
+        LocalDate eatenDate = eatenAt.toLocalDate();
+        boolean existsSameMeal = dietRecordRepository.listByUser(request.userId()).stream()
+                .filter(record -> record.eatenAt().toLocalDate().equals(eatenDate))
+                .filter(record -> record.mealType().equals(request.mealType()))
+                .findAny()
+                .isPresent();
+        if (existsSameMeal) {
+            throw new IllegalStateException("该餐次已有记录，请先删除后再新增");
+        }
         DietRecord record = new DietRecord(
                 UUID.randomUUID().toString(),
                 request.userId(),
@@ -30,9 +43,32 @@ public class DietRecordService {
                 request.proteinGram(),
                 request.fatGram(),
                 request.carbohydrateGram(),
-                LocalDateTime.now()
+                eatenAt
         );
         return dietRecordRepository.save(record);
+    }
+
+    public boolean deleteById(String id, String userId) {
+        return dietRecordRepository.deleteById(id, userId) > 0;
+    }
+
+    private LocalDateTime parseEatenAt(String eatenAt) {
+        if (eatenAt == null || eatenAt.isBlank()) {
+            return LocalDateTime.now();
+        }
+        try {
+            if (eatenAt.length() == 10) {
+                return LocalDate.parse(eatenAt, DateTimeFormatter.ISO_LOCAL_DATE)
+                        .atTime(LocalTime.now());
+            }
+            if (eatenAt.length() >= 16) {
+                String normalized = eatenAt.replace("T", " ").substring(0, 16);
+                return LocalDateTime.parse(normalized, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            }
+            return LocalDateTime.now();
+        } catch (DateTimeParseException e) {
+            return LocalDateTime.now();
+        }
     }
 
     public List<DietRecord> listByUser(String userId) {

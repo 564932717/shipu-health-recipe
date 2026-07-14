@@ -1,6 +1,6 @@
 server:
   port: 8080
-
+  address: 0.0.0.0
 spring:
   application:
     name: health-recipe
@@ -15,6 +15,11 @@ spring:
       encoding: UTF-8
       continue-on-error: true
 
+ai:
+  api-key: ${DEEPSEEK_API_KEY:}
+  model: deepseek-v4-flash
+  base-url: https://api.deepseek.com
+
 logging:
   level:
-    com.xd.healthrecipe: info
+    com.xd.healthrecipe: debug

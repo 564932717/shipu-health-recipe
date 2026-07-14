@@ -5,8 +5,10 @@ import com.xd.healthrecipe.domain.MealType;
 import com.xd.healthrecipe.domain.WeeklyReport;
 import org.springframework.stereotype.Service;
 
+import java.time.DateTimeException;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -20,9 +22,10 @@ public class ReportService {
         this.dietRecordService = dietRecordService;
     }
 
-    public WeeklyReport weeklyReport(String userId, int targetCalories) {
-        LocalDate end = LocalDate.now();
-        LocalDate start = end.minusDays(6);
+    public WeeklyReport weeklyReport(String userId, int targetCalories, String date) {
+        LocalDate referenceDate = parseDateOrToday(date);
+        LocalDate start = referenceDate.minusDays(referenceDate.getDayOfWeek().getValue() - 1); // 周一
+        LocalDate end = start.plusDays(6); // 周日
         List<DietRecord> records = dietRecordService.listByUser(userId).stream()
                 .filter(record -> {
                     LocalDate day = record.eatenAt().toLocalDate();
@@ -63,7 +66,7 @@ public class ReportService {
         long dinnerCount = records.stream().filter(r -> r.mealType() == MealType.DINNER).count();
         long snackCount = records.stream().filter(r -> r.mealType() == MealType.SNACK).count();
 
-        int weekOverWeekCalorieChange = calcWeekOverWeekChange(userId, end, totalCalories, recordDays);
+        int weekOverWeekCalorieChange = calcWeekOverWeekChange(userId, start, totalCalories, recordDays);
         String weekOverWeekTrend = weekOverWeekTrend(weekOverWeekCalorieChange);
 
         return new WeeklyReport(
@@ -113,9 +116,9 @@ public class ReportService {
         return result;
     }
 
-    private int calcWeekOverWeekChange(String userId, LocalDate thisEnd, int thisWeekTotal, int thisWeekDays) {
-        LocalDate prevStart = thisEnd.minusDays(13);
-        LocalDate prevEnd = thisEnd.minusDays(7);
+    private int calcWeekOverWeekChange(String userId, LocalDate thisWeekStart, int thisWeekTotal, int thisWeekDays) {
+        LocalDate prevStart = thisWeekStart.minusDays(7); // 上周一
+        LocalDate prevEnd = prevStart.plusDays(6); // 上周日
         List<DietRecord> prevRecords = dietRecordService.listByUser(userId).stream()
                 .filter(record -> {
                     LocalDate day = record.eatenAt().toLocalDate();
@@ -133,6 +136,17 @@ public class ReportService {
         int prevAvg = (int) (prevTotal / prevDays);
         int thisAvg = thisWeekTotal / thisWeekDays;
         return thisAvg - prevAvg;
+    }
+
+    private LocalDate parseDateOrToday(String date) {
+        if (date == null || date.isBlank()) {
+            return LocalDate.now();
+        }
+        try {
+            return LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (DateTimeException e) {
+            return LocalDate.now();
+        }
     }
 
     private String weekOverWeekTrend(int change) {

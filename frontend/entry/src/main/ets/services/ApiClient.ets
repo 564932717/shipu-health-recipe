@@ -1,5 +1,9 @@
 import http from '@ohos.net.http';
 import {
+  AiDailyAnalysisRequest,
+  AiMealPlan,
+  AiRecommendMealsRequest,
+  AiWeeklySuggestionsRequest,
   ChangePasswordRequest,
   DietRecord,
   DietRecordRequest,
@@ -41,7 +45,7 @@ interface MockUserRecipeState {
 }
 
 export class ApiClient {
-  static baseUrl: string = 'http://10.198.98.58:8080';
+  static baseUrl: string = 'http://10.0.2.2:8080';
   static useMock: boolean = false;
   static fallbackToMockAuth: boolean = true;
   static currentUserId: string = 'demo';
@@ -293,8 +297,13 @@ export class ApiClient {
       MockData.profile.userId = userId;
       return MockData.profile;
     }
-    const result = await ApiClient.request<HealthProfile>('GET', `/api/profiles/${userId}`);
-    return result.data;
+    try {
+      const result = await ApiClient.request<HealthProfile>('GET', `/api/profiles/${userId}`);
+      return result.data;
+    } catch (error) {
+      MockData.profile.userId = userId;
+      return MockData.profile;
+    }
   }
 
   static async saveProfile(profile: HealthProfile): Promise<HealthProfile> {
@@ -315,13 +324,50 @@ export class ApiClient {
     return result.data;
   }
 
+  // ---- AI 智能推荐 ----
+
+  static async aiRecommendMeals(profile: HealthProfile, refreshIndex: number = 0): Promise<AiMealPlan> {
+    const body: AiRecommendMealsRequest = {
+      profile: profile,
+      refreshIndex: refreshIndex
+    };
+    // AI 生成耗时较长，单独拉长超时
+    const result = await ApiClient.request<AiMealPlan>('POST', '/api/ai/recommend-meals', body, 15000, 185000);
+    return result.data;
+  }
+
+  static async aiGetWeeklySuggestions(userId: string, targetCalories: number, date?: string): Promise<string[]> {
+    const body: AiWeeklySuggestionsRequest = {
+      userId: userId,
+      targetCalories: targetCalories,
+      date: date ?? ApiClient.dateKey(new Date())
+    };
+    // AI 生成建议耗时较长，同步拉超时
+    const result = await ApiClient.request<string[]>('POST', '/api/ai/weekly-suggestions', body, 15000, 95000);
+    return result.data as string[];
+  }
+
+  static async aiAnalyzeDay(userId: string, date: string,
+                             targetCalories: number, targetProtein: number,
+                             targetFat: number, targetCarbs: number): Promise<string[]> {
+    const body: AiDailyAnalysisRequest = {
+      userId: userId,
+      date: date,
+      targetCalories: targetCalories,
+      targetProtein: targetProtein,
+      targetFat: targetFat,
+      targetCarbs: targetCarbs
+    };
+    const result = await ApiClient.request<string[]>('POST', '/api/ai/daily-analysis', body, 15000, 95000);
+    return result.data as string[];
+  }
+
   static async searchRecipes(keyword: string, goal?: string, mealType?: MealType): Promise<Recipe[]> {
     if (ApiClient.useMock) {
       const recipes = ApiClient.mockRecipes();
       const cleanKeyword = keyword.trim();
       return recipes.filter((recipe: Recipe) => {
-        const source = `${recipe.name} ${recipe.category} ${recipe.tags.join(' ')} ${recipe.ingredients.join(' ')}`;
-        const keywordMatched = cleanKeyword.length === 0 || source.indexOf(cleanKeyword) >= 0;
+        const keywordMatched = cleanKeyword.length === 0 || recipe.name.indexOf(cleanKeyword) >= 0;
         const mealMatched = mealType == null || recipe.mealType === mealType;
         return keywordMatched && mealMatched;
       });
@@ -373,7 +419,18 @@ export class ApiClient {
   }
 
   static async addDietRecord(record: DietRecordRequest): Promise<DietRecord> {
+    const eatenDate = record.eatenAt != null && record.eatenAt.length >= 10 ? record.eatenAt.substring(0, 10) : '';
+    if (eatenDate.length > 0 && ApiClient.mockDietRecords.some((r: DietRecord) =>
+      r.userId === record.userId &&
+      r.eatenAt.substring(0, 10) === eatenDate &&
+      r.mealType === record.mealType)) {
+      ApiClient.lastError = '该餐次已有记录，请先删除后再新增';
+      throw new Error(ApiClient.lastError);
+    }
     if (ApiClient.useMock) {
+      const eatenAt = record.eatenAt != null && record.eatenAt.length > 0
+        ? record.eatenAt
+        : new Date().toISOString();
       const demoRecord: DietRecord = {
         id: Date.now().toString(),
         userId: record.userId,
@@ -383,7 +440,7 @@ export class ApiClient {
         proteinGram: record.proteinGram,
         fatGram: record.fatGram,
         carbohydrateGram: record.carbohydrateGram,
-        eatenAt: new Date().toISOString()
+        eatenAt: eatenAt
       };
       ApiClient.mockDietRecords.unshift(demoRecord);
       return demoRecord;
@@ -394,6 +451,9 @@ export class ApiClient {
       ApiClient.cacheRecord(savedRecord);
       return savedRecord;
     } catch (_err) {
+      const eatenAt = record.eatenAt != null && record.eatenAt.length > 0
+        ? record.eatenAt
+        : new Date().toISOString();
       const fallbackRecord: DietRecord = {
         id: Date.now().toString(),
         userId: record.userId,
@@ -403,12 +463,22 @@ export class ApiClient {
         proteinGram: record.proteinGram,
         fatGram: record.fatGram,
         carbohydrateGram: record.carbohydrateGram,
-        eatenAt: new Date().toISOString()
+        eatenAt: eatenAt
       };
       ApiClient.mockDietRecords.unshift(fallbackRecord);
       return fallbackRecord;
     }
   }
+
+  static async deleteDietRecord(id: string, userId: string): Promise<void> {
+    if (ApiClient.useMock) {
+      ApiClient.mockDietRecords = ApiClient.mockDietRecords.filter((record: DietRecord) => record.id !== id);
+      ApiClient.lastError = '';
+      return;
+    }
+    await ApiClient.request<Object>('DELETE', `/api/diet-records/${id}?userId=${userId}`);
+  }
+
 
   static async listDietRecords(userId: string): Promise<DietRecord[]> {
     if (ApiClient.useMock) {
@@ -430,19 +500,20 @@ export class ApiClient {
     return result.data;
   }
 
-  static async getWeeklyReport(userId: string, targetCalories: number): Promise<WeeklyReport> {
+  static async getWeeklyReport(userId: string, targetCalories: number, date?: string): Promise<WeeklyReport> {
     if (ApiClient.useMock) {
-      return ApiClient.computeWeeklyReport(userId, targetCalories);
+      return ApiClient.computeWeeklyReport(userId, targetCalories, date ?? ApiClient.dateKey(new Date()));
     }
     try {
-      const result = await ApiClient.request<WeeklyReport>('GET', `/api/reports/week?userId=${userId}&targetCalories=${targetCalories}`);
+      const dateParam = date != null && date.length > 0 ? `&date=${date}` : '';
+      const result = await ApiClient.request<WeeklyReport>('GET', `/api/reports/week?userId=${userId}&targetCalories=${targetCalories}${dateParam}`);
       const report = result.data;
       if (report.weeklyRecords == null || report.weeklyRecords.length === 0) {
         report.weeklyRecords = ApiClient.mockDietRecords.filter((r: DietRecord) => r.userId === userId);
       }
       return report;
     } catch (error) {
-      return ApiClient.computeWeeklyReport(userId, targetCalories);
+      return ApiClient.computeWeeklyReport(userId, targetCalories, date ?? ApiClient.dateKey(new Date()));
     }
   }
 
@@ -450,26 +521,22 @@ export class ApiClient {
     ApiClient.mockDietRecords.unshift(record);
   }
 
-  private static computeWeeklyReport(userId: string, targetCalories: number): WeeklyReport {
+  private static computeWeeklyReport(userId: string, targetCalories: number, date: string): WeeklyReport {
     const userRecords = ApiClient.mockDietRecords.filter((r: DietRecord) => r.userId === userId);
-    const now = new Date();
+    const referenceDate = ApiClient.parseDate(date, new Date());
+    const weekStart = ApiClient.weekStartOf(referenceDate);
     const dayOrder: string[] = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
     const labels: string[] = [];
+    const dateKeys: string[] = [];
     const dayMap: Map<string, DietRecord[]> = new Map();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now.getTime());
-      d.setDate(d.getDate() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart.getTime());
+      d.setDate(d.getDate() + i);
+      const key = ApiClient.dateKey(d);
       const label = dayOrder[d.getDay()];
       labels.push(label);
+      dateKeys.push(key);
       dayMap.set(key, []);
-    }
-
-    const dateKeys: string[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now.getTime());
-      d.setDate(d.getDate() - i);
-      dateKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
     }
 
     userRecords.forEach((record: DietRecord) => {
@@ -599,10 +666,10 @@ export class ApiClient {
       }
     }
 
-    const startD = new Date(now.getTime());
-    startD.setDate(startD.getDate() - 6);
-    const startStr = `${startD.getFullYear()}-${String(startD.getMonth() + 1).padStart(2, '0')}-${String(startD.getDate()).padStart(2, '0')}`;
-    const endStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const startStr = ApiClient.dateKey(weekStart);
+    const endDate = new Date(weekStart.getTime());
+    endDate.setDate(endDate.getDate() + 6);
+    const endStr = ApiClient.dateKey(endDate);
 
     return {
       userId: userId,
@@ -635,7 +702,8 @@ export class ApiClient {
     };
   }
 
-  private static async request<T>(method: string, path: string, body?: Object): Promise<ApiResponse<T>> {
+  private static async request<T>(method: string, path: string, body?: Object,
+    connectTimeout: number = 5000, readTimeout: number = 8000): Promise<ApiResponse<T>> {
     const request = http.createHttp();
     try {
       let requestMethod = http.RequestMethod.GET;
@@ -651,7 +719,9 @@ export class ApiClient {
       const response = await request.request(ApiClient.baseUrl + path, {
         method: requestMethod,
         header: { 'Content-Type': 'application/json' },
-        extraData: body == null ? undefined : JSON.stringify(body)
+        extraData: body == null ? undefined : JSON.stringify(body),
+        connectTimeout: connectTimeout,
+        readTimeout: readTimeout
       });
       const result = JSON.parse(response.result as string) as ApiResponse<T>;
       if (!result.success) {
@@ -852,5 +922,30 @@ export class ApiClient {
       }
     }
     return null;
+  }
+
+  private static parseDate(dateStr: string, fallback: Date): Date {
+    if (dateStr == null || dateStr.length === 0) {
+      return fallback;
+    }
+    const parsed = new Date(dateStr);
+    if (isNaN(parsed.getTime())) {
+      return fallback;
+    }
+    return parsed;
+  }
+
+  private static dateKey(date: Date): string {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${month}-${day}`;
+  }
+
+  private static weekStartOf(date: Date): Date {
+    const d = new Date(date.getTime());
+    const weekday = d.getDay();
+    const offset = weekday === 0 ? 6 : weekday - 1;
+    d.setDate(d.getDate() - offset);
+    return d;
   }
 }

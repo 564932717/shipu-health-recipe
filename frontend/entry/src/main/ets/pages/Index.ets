@@ -1,9 +1,9 @@
 import { LoginRequest, RegisterRequest, UserSession } from '../common/Models';
 import { ApiClient } from '../services/ApiClient';
 import { DashboardPage } from './DashboardPage';
-import { InsightsPage } from './InsightsPage';
 import { ProfilePage } from './ProfilePage';
 import { RecipeHubPage } from './RecipeHubPage';
+import { ReportPage } from './ReportPage';
 import { UserCenterPage } from './UserCenterPage';
 
 @Entry
@@ -12,10 +12,13 @@ struct Index {
   @State isAuthed: boolean = false;
   @State currentUserId: string = '';
   @State currentUserName: string = '';
+  @State currentTabIndex: number = 0;
   @State panelMode: number = -1;
 
   aboutToAppear() {
     AppStorage.setOrCreate('favIds', []);
+    AppStorage.setOrCreate('aiRecommendationLoading', false);
+    AppStorage.setOrCreate('aiRecommendedRecipeNames', []);
   }
   @State loginUsername: string = '';
   @State loginPassword: string = '';
@@ -369,9 +372,9 @@ struct Index {
 
   @Builder
   mainTabs() {
-    Tabs({ barPosition: BarPosition.End }) {
+    Tabs({ barPosition: BarPosition.End, index: this.currentTabIndex }) {
       TabContent() {
-        DashboardPage()
+        DashboardPage({ selectedTabIndex: $currentTabIndex })
       }
       .tabBar('首页')
 
@@ -386,7 +389,7 @@ struct Index {
       .tabBar('食谱')
 
       TabContent() {
-        InsightsPage()
+        ReportPage()
       }
       .tabBar('统计')
 
@@ -396,6 +399,9 @@ struct Index {
       .tabBar('我的')
     }
     .backgroundColor('#F6F8F3')
+    .onChange((index: number) => {
+      this.currentTabIndex = index;
+    })
   }
 
   private openPanel(mode: number) {
@@ -491,6 +497,9 @@ struct Index {
   private finishAuth(session: UserSession) {
     this.currentUserId = session.userId;
     this.currentUserName = session.displayName.length > 0 ? session.displayName : session.username;
+    this.currentTabIndex = 0;
+    AppStorage.set('aiRecommendationLoading', false);
+    AppStorage.set('aiRecommendedRecipeNames', []);
     this.isAuthed = true;
   }
 }

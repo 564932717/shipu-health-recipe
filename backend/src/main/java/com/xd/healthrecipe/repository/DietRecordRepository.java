@@ -57,4 +57,8 @@ public class DietRecordRepository {
                 rowMapper,
                 userId);
     }
+
+    public int deleteById(String id, String userId) {
+        return jdbcTemplate.update("DELETE FROM diet_record WHERE id = ? AND user_id = ?", id, userId);
+    }
 }

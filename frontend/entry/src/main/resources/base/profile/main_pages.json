@@ -4,6 +4,7 @@
     "pages/RecipeDetailPage",
     "pages/FavoritePage",
     "pages/HistoryPage",
-    "pages/RecipeList"
+    "pages/RecipeList",
+    "pages/ArticleWebPage"
   ]
 }

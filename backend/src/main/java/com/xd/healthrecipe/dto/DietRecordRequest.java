@@ -11,6 +11,7 @@ public record DietRecordRequest(
         int calories,
         int proteinGram,
         int fatGram,
-        int carbohydrateGram
+        int carbohydrateGram,
+        String eatenAt
 ) {
 }

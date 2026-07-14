@@ -1,4 +1,5 @@
-import { Gender, HealthGoal, HealthProfile, MealPlan, MealType, NutritionSummary, WeeklyReport } from './Models';
+import { AiMealPlan, AiRecipe, Gender, HealthGoal, HealthProfile, MealPlan, MealType, NutritionSummary, Recipe, WeeklyReport } from './Models';
+
 
 export class MockData {
   static profile: HealthProfile = {
@@ -107,6 +108,115 @@ export class MockData {
     },
     notes: ['推荐结果会根据目标、忌口、食谱标签进行过滤。']
   };
+
+  private static toAiRecipe(recipe: Recipe): AiRecipe {
+    return {
+      name: recipe.name,
+      calories: recipe.calories,
+      proteinGram: recipe.proteinGram,
+      fatGram: recipe.fatGram,
+      carbohydrateGram: recipe.carbohydrateGram,
+      ingredients: recipe.ingredients,
+      steps: recipe.steps,
+      difficulty: recipe.difficulty,
+      cookTime: recipe.cookTime
+    };
+  }
+
+  static aiMealPlan: AiMealPlan = {
+    breakfast: MockData.mealPlan.breakfast.map((item: Recipe) => MockData.toAiRecipe(item)),
+    lunch: MockData.mealPlan.lunch.map((item: Recipe) => MockData.toAiRecipe(item)),
+    dinner: MockData.mealPlan.dinner.map((item: Recipe) => MockData.toAiRecipe(item)),
+    snack: MockData.mealPlan.snack.map((item: Recipe) => MockData.toAiRecipe(item)),
+    estimatedIntake: MockData.mealPlan.estimatedIntake,
+    notes: ['方案由 AI 根据你的健康档案与目标实时生成。', '如不满意可点击"换一换"重新生成。', '如有特殊过敏史请在忌口中标注。']
+  };
+
+  private static aiPlanVariant1: AiMealPlan = {
+    breakfast: [{
+      name: '燕麦鸡蛋牛奶早餐', calories: 420, proteinGram: 28, fatGram: 12, carbohydrateGram: 48,
+      ingredients: ['燕麦 50g', '鸡蛋 1个', '牛奶 250ml', '蓝莓 30g'],
+      steps: ['燕麦加牛奶煮 2 分钟', '水煮蛋 8 分钟', '搭配蓝莓食用'], difficulty: '简单', cookTime: '10分钟'
+    }],
+    lunch: [{
+      name: '糙米鸡胸蔬菜碗', calories: 560, proteinGram: 42, fatGram: 14, carbohydrateGram: 66,
+      ingredients: ['糙米 100g', '鸡胸肉 120g', '西兰花', '胡萝卜'],
+      steps: ['糙米煮熟', '鸡胸肉煎熟切块', '蔬菜焯水拌入'], difficulty: '中等', cookTime: '25分钟'
+    }],
+    dinner: [{
+      name: '豆腐菌菇青菜汤', calories: 310, proteinGram: 24, fatGram: 8, carbohydrateGram: 28,
+      ingredients: ['嫩豆腐 200g', '菌菇 100g', '青菜 100g'],
+      steps: ['菌菇炒软加水', '放入豆腐煮 5 分钟', '加入青菜煮 2 分钟'], difficulty: '简单', cookTime: '15分钟'
+    }],
+    snack: [{
+      name: '无糖酸奶坚果杯', calories: 220, proteinGram: 14, fatGram: 8, carbohydrateGram: 16,
+      ingredients: ['无糖酸奶 150g', '混合坚果 15g', '奇亚籽 5g'],
+      steps: ['酸奶倒入杯中', '撒入坚果和奇亚籽'], difficulty: '简单', cookTime: '2分钟'
+    }],
+    estimatedIntake: { dailyCalories: 1510, proteinGram: 108, fatGram: 42, carbohydrateGram: 158,
+      macroRatio: '蛋白质 108g / 脂肪 42g / 碳水 158g' },
+    notes: ['当前为离线备用方案 1。', '连接后端后可体验 AI 实时推荐。']
+  };
+
+  private static aiPlanVariant2: AiMealPlan = {
+    breakfast: [{
+      name: '紫薯豆浆蒸蛋', calories: 390, proteinGram: 26, fatGram: 11, carbohydrateGram: 46,
+      ingredients: ['紫薯 100g', '豆浆 250ml', '鸡蛋 1个'],
+      steps: ['紫薯蒸熟', '鸡蛋加豆浆蒸 10 分钟', '搭配食用'], difficulty: '简单', cookTime: '15分钟'
+    }],
+    lunch: [{
+      name: '三文鱼杂粮饭', calories: 580, proteinGram: 38, fatGram: 18, carbohydrateGram: 62,
+      ingredients: ['三文鱼 120g', '杂粮饭 100g', '芦笋 100g'],
+      steps: ['三文鱼煎熟', '杂粮饭蒸熟', '芦笋焯水'], difficulty: '中等', cookTime: '25分钟'
+    }],
+    dinner: [{
+      name: '清蒸鲈鱼配杂粮', calories: 330, proteinGram: 30, fatGram: 10, carbohydrateGram: 30,
+      ingredients: ['鲈鱼 150g', '杂粮 80g', '姜丝', '葱'],
+      steps: ['鲈鱼加姜丝蒸 12 分钟', '杂粮煮熟', '淋上少量蒸鱼豉油'], difficulty: '简单', cookTime: '20分钟'
+    }],
+    snack: [{
+      name: '苹果花生酱片', calories: 200, proteinGram: 8, fatGram: 12, carbohydrateGram: 18,
+      ingredients: ['苹果 1个', '无糖花生酱 20g'],
+      steps: ['苹果切片', '涂抹花生酱'], difficulty: '简单', cookTime: '3分钟'
+    }],
+    estimatedIntake: { dailyCalories: 1500, proteinGram: 102, fatGram: 51, carbohydrateGram: 156,
+      macroRatio: '蛋白质 102g / 脂肪 51g / 碳水 156g' },
+    notes: ['当前为离线备用方案 2。', '连接后端后可体验 AI 实时推荐。']
+  };
+
+  private static aiPlanVariant3: AiMealPlan = {
+    breakfast: [{
+      name: '酸奶坚果水果碗', calories: 360, proteinGram: 18, fatGram: 10, carbohydrateGram: 48,
+      ingredients: ['无糖酸奶 200g', '混合坚果 20g', '香蕉 1根', '燕麦 30g'],
+      steps: ['酸奶铺底', '加入燕麦和坚果', '香蕉切片摆放'], difficulty: '简单', cookTime: '5分钟'
+    }],
+    lunch: [{
+      name: '牛肉番茄意面', calories: 540, proteinGram: 40, fatGram: 16, carbohydrateGram: 58,
+      ingredients: ['全麦意面 80g', '牛肉 100g', '番茄 2个', '洋葱'],
+      steps: ['意面煮熟', '牛肉和番茄炒成酱', '拌匀'], difficulty: '中等', cookTime: '30分钟'
+    }],
+    dinner: [{
+      name: '冬瓜虾仁汤', calories: 290, proteinGram: 28, fatGram: 6, carbohydrateGram: 26,
+      ingredients: ['虾仁 120g', '冬瓜 200g', '海带 30g'],
+      steps: ['冬瓜切块煮软', '加入虾仁和海带', '调味煮 3 分钟'], difficulty: '简单', cookTime: '15分钟'
+    }],
+    snack: [{
+      name: '黄瓜鸡蛋杯', calories: 180, proteinGram: 16, fatGram: 6, carbohydrateGram: 12,
+      ingredients: ['鸡蛋 1个', '黄瓜 1根', '黑胡椒'],
+      steps: ['鸡蛋煮熟切块', '黄瓜切片', '拌匀撒黑胡椒'], difficulty: '简单', cookTime: '8分钟'
+    }],
+    estimatedIntake: { dailyCalories: 1370, proteinGram: 102, fatGram: 38, carbohydrateGram: 144,
+      macroRatio: '蛋白质 102g / 脂肪 38g / 碳水 144g' },
+    notes: ['当前为离线备用方案 3。', '连接后端后可体验 AI 实时推荐。']
+  };
+
+  private static aiPlanVariants: AiMealPlan[] = [
+    MockData.aiPlanVariant1, MockData.aiPlanVariant2, MockData.aiPlanVariant3
+  ];
+
+  static getRotatingAiMealPlan(refreshIndex: number): AiMealPlan {
+    return MockData.aiPlanVariants[refreshIndex % MockData.aiPlanVariants.length];
+  }
 
   static summary: NutritionSummary = {
     userId: 'demo',

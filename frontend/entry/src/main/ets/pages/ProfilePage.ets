@@ -10,7 +10,7 @@ import { ApiClient } from '../services/ApiClient';
 
 @Component
 export struct ProfilePage {
-  @Prop activeUserId: string = '';
+  @Watch('onActiveUserIdChanged') @Prop activeUserId: string = '';
   @State profile: HealthProfile = MockData.profile;
   @State assessment: HealthAssessment = MockData.mealPlan.assessment;
   @State loadedUserId: string = '';
@@ -41,9 +41,18 @@ export struct ProfilePage {
   @State portraitNutritionCalloutText: string = '';
   @State portraitGoalCalloutText: string = '';
   @State saveMessage: string = '';
+  private chronicOptions: string[] = ['无', '高血压', '糖尿病', '脂肪肝', '高血脂', '痛风'];
+  private tabooOptions: string[] = ['无', '花生', '海鲜', '高盐', '乳糖', '麸质'];
+  private tasteOptions: string[] = ['无', '清淡', '高蛋白', '低碳', '少油', '辛辣'];
 
   aboutToAppear() {
     this.load();
+  }
+
+  private onActiveUserIdChanged() {
+    if (this.profileUserId() !== this.loadedUserId) {
+      this.load();
+    }
   }
 
   async load() {
@@ -170,15 +179,9 @@ export struct ProfilePage {
         .fontColor('#071725')
         .width('100%')
 
-      this.textRow('慢病情况', '如：高血压、糖尿病、脂肪肝', this.chronicText, () => {
-        this.rebuildAssessment();
-      })
-      this.textRow('饮食禁忌', '如：花生、海鲜、高盐、乳糖', this.tabooText, () => {
-        this.rebuildAssessment();
-      })
-      this.textRow('口味偏好', '如：清淡、高蛋白、低碳', this.tasteText, () => {
-        this.rebuildAssessment();
-      })
+      this.constraintSelectRow('慢病情况', this.chronicOptions)
+      this.constraintSelectRow('饮食禁忌', this.tabooOptions)
+      this.constraintSelectRow('口味偏好', this.tasteOptions)
     }
     .padding(16)
     .backgroundColor('#FFFFFF')
@@ -566,30 +569,34 @@ export struct ProfilePage {
   }
 
   @Builder
-  textRow(label: string, placeholder: string, text: string, onChange: () => void) {
+  constraintSelectRow(label: string, options: string[]) {
     Column({ space: 6 }) {
       Text(label)
         .fontSize(14)
         .fontColor('#657064')
         .width('100%')
-      TextInput({ placeholder: placeholder, text: text })
-        .height(42)
-        .fontSize(14)
+
+      Select(this.toSelectOptions(options))
+        .selected(this.optionIndex(options, this.constraintValue(label)))
+        .value(this.constraintValue(label))
+        .height(46)
+        .width('100%')
+        .fontColor('#071725')
         .backgroundColor('#F8FAF5')
         .borderRadius(12)
         .padding({ left: 12, right: 12 })
-        .onChange((value: string) => {
-          if (label === '慢病情况') {
-            this.chronicText = value;
-          }
-          if (label === '饮食禁忌') {
-            this.tabooText = value;
-          }
-          if (label === '口味偏好') {
-            this.tasteText = value;
-          }
-          onChange();
+        .selectedOptionBgColor('#E8F2E7')
+        .selectedOptionFontColor('#156B45')
+        .optionBgColor('#FFFFFF')
+        .optionFontColor('#405146')
+        .onSelect((index: number, value: string) => {
+          this.selectConstraint(label, value);
         })
+
+      Text(`当前选择：${this.constraintValue(label)}`)
+        .fontSize(12)
+        .fontColor('#156B45')
+        .width('100%')
     }
     .width('100%')
   }
@@ -749,9 +756,9 @@ export struct ProfilePage {
   }
 
   private hydrateTextFields() {
-    this.chronicText = this.profile.chronicConditions.join('、');
-    this.tabooText = this.profile.taboos.join('、');
-    this.tasteText = this.profile.tastePreferences.join('、');
+    this.chronicText = this.currentConstraint(this.profile.chronicConditions, this.chronicOptions);
+    this.tabooText = this.currentConstraint(this.profile.taboos, this.tabooOptions);
+    this.tasteText = this.currentConstraint(this.profile.tastePreferences, this.tasteOptions);
   }
 
   private normalizeProfile() {
@@ -1147,11 +1154,76 @@ export struct ProfilePage {
     const result: string[] = [];
     parts.forEach((item: string) => {
       const clean = item.trim();
-      if (clean.length > 0) {
+      if (clean.length > 0 && clean !== '无') {
         result.push(clean);
       }
     });
     return result;
+  }
+
+  private currentConstraint(items: string[], options: string[]): string {
+    for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+      const item = items[itemIndex];
+      const exactIndex = options.indexOf(item);
+      if (exactIndex > 0) {
+        return options[exactIndex];
+      }
+      for (let optionIndex = 1; optionIndex < options.length; optionIndex++) {
+        if (item.includes(options[optionIndex])) {
+          return options[optionIndex];
+        }
+      }
+    }
+    return '无';
+  }
+
+  private optionIndex(options: string[], selectedValue: string): number {
+    const index = options.indexOf(selectedValue);
+    return index >= 0 ? index : 0;
+  }
+
+  private toSelectOptions(options: string[]): SelectOption[] {
+    const result: SelectOption[] = [];
+    options.forEach((item: string) => {
+      const option: SelectOption = { value: item };
+      result.push(option);
+    });
+    return result;
+  }
+
+  private constraintValue(label: string): string {
+    if (label === '慢病情况') {
+      return this.chronicText.length > 0 ? this.chronicText : '无';
+    }
+    if (label === '饮食禁忌') {
+      return this.tabooText.length > 0 ? this.tabooText : '无';
+    }
+    return this.tasteText.length > 0 ? this.tasteText : '无';
+  }
+
+  private selectConstraint(label: string, value: string) {
+    if (label === '慢病情况') {
+      this.chronicText = value;
+    } else if (label === '饮食禁忌') {
+      this.tabooText = value;
+    } else {
+      this.tasteText = value;
+    }
+    this.rebuildAssessment();
+    this.saveConstraintSelection();
+  }
+
+  private async saveConstraintSelection() {
+    this.saveMessage = '正在保存健康约束...';
+    try {
+      const savedProfile = await ApiClient.saveProfile(this.profile);
+      this.profile = savedProfile;
+      this.persistLocalAssessment();
+      this.saveMessage = '健康约束已自动保存，下次登录会继续显示当前选择';
+    } catch (error) {
+      this.persistLocalAssessment();
+      this.saveMessage = '后端暂不可用，健康约束已在本次运行中保存';
+    }
   }
 
   private genderLabel(): string {

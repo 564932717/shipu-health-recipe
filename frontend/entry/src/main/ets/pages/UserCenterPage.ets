@@ -1,6 +1,11 @@
 import { ApiClient } from '../services/ApiClient';
 import { ChangePasswordRequest, Recipe, RecipeHistoryItem, SyncSettingRequest, UpdateProfileRequest, UserCenterSummary } from '../common/Models';
 import router from '@ohos.router';
+import { AddFormMenuItem } from '@kit.ArkUI';
+import { Want } from '@kit.AbilityKit';
+import { formBindingData } from '@kit.FormKit';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { HealthCardData, HealthCardService } from '../services/HealthCardService';
 
 @Component
 export struct UserCenterPage {
@@ -17,6 +22,8 @@ export struct UserCenterPage {
   };
   @State favoriteRecipes: Recipe[] = [];
   @State historyRecipes: RecipeHistoryItem[] = [];
+  @StorageLink('aiRecommendationLoading') @Watch('onAtomicCardSourceChanged') aiRecommendationLoading: boolean = false;
+  @StorageLink('aiRecommendedRecipeNames') @Watch('onAtomicCardSourceChanged') aiRecommendedRecipeNames: string[] = [];
   @State oldPassword: string = '';
   @State newPassword: string = '';
   @State confirmPassword: string = '';
@@ -57,6 +64,7 @@ export struct UserCenterPage {
         targetCalories: this.numberValue(summary.targetCalories, this.summary.targetCalories),
         recommendedRecipeName: this.recommendedRecipeName(summary.recommendedRecipeName, history)
       };
+      await this.refreshAtomicCard();
       this.message = '';
     } catch (error) {
       this.showError(ApiClient.lastError.length > 0 ? ApiClient.lastError : '用户中心数据加载失败，请稍后重试');
@@ -414,22 +422,89 @@ export struct UserCenterPage {
   @Builder
   atomicCardPreview() {
     Column({ space: 12 }) {
-      Text('原子化卡片预览')
-        .fontSize(19)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#071725')
+      Row({ space: 12 }) {
+        Text('原子化卡片预览')
+          .fontSize(19)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#071725')
+          .layoutWeight(1)
+
+        Button('添加到桌面')
+          .id('atomicCardAddButton')
+          .height(34)
+          .padding({ left: 14, right: 14 })
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#156B45')
+          .backgroundColor('#E8F4EC')
+          .borderRadius(17)
+          .bindMenu(this.addToDesktopMenu)
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Column({ space: 12 }) {
+        Row() {
+          Text('今日摄入')
+            .fontSize(13)
+            .fontColor('#CFE3D4')
+            .layoutWeight(1)
+          Text(`已完成 ${this.intakeProgress()}%`)
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#F8DD77')
+        }
         .width('100%')
-      Column({ space: 8 }) {
-        Text('今日摄入')
-          .fontSize(13)
-          .fontColor('#CFE3D4')
+
         Text(`${this.summary.todayCalories} / ${this.summary.targetCalories} 千卡`)
           .fontSize(24)
           .fontWeight(FontWeight.Bold)
           .fontColor('#FFF6D5')
-        Text(`推荐：${this.summary.recommendedRecipeName}`)
-          .fontSize(13)
-          .fontColor('#F8DD77')
+
+        Row() {
+          Row()
+            .width(`${this.intakeProgress()}%`)
+            .height(6)
+            .backgroundColor('#83C988')
+            .borderRadius(3)
+        }
+        .width('100%')
+        .height(6)
+        .backgroundColor('#314554')
+        .borderRadius(3)
+
+        Column({ space: 4 }) {
+          Text('今日推荐')
+            .fontSize(12)
+            .fontColor('#CFE3D4')
+          if (this.aiRecommendationLoading) {
+            Row({ space: 8 }) {
+              LoadingProgress()
+                .width(16)
+                .height(16)
+                .color('#F8DD77')
+              Text('AI正在为你急速生成中')
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor('#F8DD77')
+            }
+          } else if (this.aiRecommendedRecipeNames.length > 0) {
+            ForEach(this.aiRecommendedRecipeNames, (meal: string) => {
+              Text(meal)
+                .fontSize(14)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#F8DD77')
+                .lineHeight(21)
+                .width('100%')
+            }, (meal: string) => meal)
+          } else {
+            Text('AI推荐暂未生成')
+              .fontSize(14)
+              .fontColor('#F8DD77')
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
+        .width('100%')
       }
       .alignItems(HorizontalAlign.Start)
       .padding(16)
@@ -452,6 +527,74 @@ export struct UserCenterPage {
     .backgroundColor('#FFFFFF')
     .borderRadius(18)
     .width('100%')
+  }
+
+  @Builder
+  addToDesktopMenu() {
+    Menu() {
+      AddFormMenuItem(this.atomicCardWant(), 'atomicCardAddButton', {
+        formBindingData: formBindingData.createFormBindingData(this.atomicCardFormData()),
+        callback: (error: BusinessError, formId: string) => {
+          if (error && error.code !== 0) {
+            this.showError(`添加到桌面失败：${error.code} ${error.message}`);
+            return;
+          }
+          this.message = '原子化卡片已添加到桌面';
+          this.messageType = 'info';
+        },
+        style: {
+          options: {
+            content: '添加到桌面'
+          }
+        }
+      })
+    }
+  }
+
+  private atomicCardWant(): Want {
+    return {
+      bundleName: 'com.example.shipu',
+      abilityName: 'HealthCardFormAbility',
+      moduleName: 'entry',
+      parameters: {
+        // 4 代表 4*4 卡片。2*4 高度不足以稳定展示早餐、午餐、晚餐和加餐四行内容。
+        'ohos.extra.param.key.form_dimension': 4,
+        'ohos.extra.param.key.form_name': 'health_card',
+        'ohos.extra.param.key.module_name': 'entry'
+      }
+    };
+  }
+
+  private atomicCardFormData(): HealthCardData {
+    return new HealthCardData(
+      this.summary.todayCalories,
+      this.summary.targetCalories,
+      this.intakeProgress(),
+      this.desktopRecommendation()
+    );
+  }
+
+  private desktopRecommendation(): string {
+    if (this.aiRecommendationLoading) {
+      return 'AI正在为你急速生成中';
+    }
+    if (this.aiRecommendedRecipeNames.length > 0) {
+      // 桌面卡片使用换行分隔每餐，避免四餐内容挤在同一行后被截断。
+      return this.aiRecommendedRecipeNames.join('\n');
+    }
+    return 'AI推荐暂未生成';
+  }
+
+  private onAtomicCardSourceChanged(): void {
+    this.refreshAtomicCard();
+  }
+
+  private async refreshAtomicCard(): Promise<void> {
+    try {
+      await HealthCardService.saveAndUpdate(getContext(this), this.atomicCardFormData());
+    } catch (error) {
+      console.error(`Refresh atomic card failed: ${JSON.stringify(error)}`);
+    }
   }
 
   private async saveDisplayName() {
@@ -599,6 +742,14 @@ export struct UserCenterPage {
       return fallback;
     }
     return parsed;
+  }
+
+  private intakeProgress(): number {
+    if (this.summary.targetCalories <= 0) {
+      return 0;
+    }
+    const progress = Math.round(this.summary.todayCalories * 100 / this.summary.targetCalories);
+    return Math.max(0, Math.min(100, progress));
   }
 
   private recommendedRecipeName(value: string, history: RecipeHistoryItem[]): string {
