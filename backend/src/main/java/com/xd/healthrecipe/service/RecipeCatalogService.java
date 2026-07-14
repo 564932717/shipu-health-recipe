@@ -36,8 +36,6 @@ public class RecipeCatalogService {
     }
 
     private boolean containsKeyword(Recipe recipe, String keyword) {
-        String source = (recipe.name() + " " + recipe.category() + " " + recipe.tags() + " " + recipe.ingredients())
-                .toLowerCase(Locale.ROOT);
-        return source.contains(keyword);
+        return recipe.name().toLowerCase(Locale.ROOT).contains(keyword);
     }
 }

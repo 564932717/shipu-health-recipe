@@ -6,7 +6,9 @@ import com.xd.healthrecipe.dto.ApiResponse;
 import com.xd.healthrecipe.dto.DietRecordRequest;
 import com.xd.healthrecipe.service.DietRecordService;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -40,5 +42,11 @@ public class DietRecordController {
             @RequestParam(defaultValue = "1800") int targetCalories
     ) {
         return ApiResponse.ok(dietRecordService.dailySummary(userId, targetCalories));
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable String id, @RequestParam String userId) {
+        boolean deleted = dietRecordService.deleteById(id, userId);
+        return deleted ? ApiResponse.ok(null) : ApiResponse.fail("记录不存在或无权限");
     }
 }

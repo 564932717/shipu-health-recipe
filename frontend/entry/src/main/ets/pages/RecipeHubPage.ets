@@ -1,4 +1,4 @@
-import { HealthProfile, MealPlan, Recipe, RecipePageResponse } from '../common/Models';
+import { AiMealPlan, AiRecipe, HealthProfile, Recipe, RecipePageResponse } from '../common/Models';
 import { MockData } from '../common/MockData';
 import { ApiClient } from '../services/ApiClient';
 import { SortSelector } from './SortSelector';
@@ -6,29 +6,77 @@ import router from '@ohos.router';
 
 @Component
 export struct RecipeHubPage {
-  @State plan: MealPlan = MockData.mealPlan;
+  // 离线备用方案（永远显示）
+  @State offlinePlan: AiMealPlan = MockData.getRotatingAiMealPlan(0);
+  @State offlineRefreshIndex: number = 1;
+  // AI 实时推荐（连上才显示）
+  @State aiPlan: AiMealPlan = MockData.aiMealPlan;
+  @State aiRefreshIndex: number = 0;
+
   @State recipes: Recipe[] = [];
   @State keyword: string = '';
   @State categoryIndex: number = 0;
   @StorageLink('favIds') favoriteIds: string[] = [];
   @State message: string = '';
+  @State aiMessage: string = '';
   @State currentPage: number = 1;
   @State totalPages: number = 1;
   @State total: number = 0;
   @State @Watch('onSortChanged') sortType: string = 'default';
   @State isLoading: boolean = false;
+  @State aiLoading: boolean = false;
+  @State isConnected: boolean = false;
   private pageSize: number = 4;
+  private lastAiRefreshTime: number = 0;
+  private readonly aiDebounceMs: number = 5000; // 5秒防抖
 
   aboutToAppear() {
     this.load();
   }
 
   async load() {
-    const profile: HealthProfile = await ApiClient.getProfile(ApiClient.currentUserId);
-    this.plan = await ApiClient.recommend(profile);
+    this.loadAiPlan(); // 后台尝试连接后端，不阻塞页面
     await this.loadRecipes();
     await this.refreshFavoriteState();
   }
+
+  // 换一换：离线方案本地轮换
+  rotateOffline() {
+    this.offlinePlan = MockData.getRotatingAiMealPlan(this.offlineRefreshIndex);
+    this.offlineRefreshIndex++;
+  }
+
+  // 换一换：AI 生成
+  async loadAiPlan() {
+    // 防抖：5秒内不允许重复请求
+    const now = Date.now();
+    if (now - this.lastAiRefreshTime < this.aiDebounceMs) {
+      return;
+    }
+    this.lastAiRefreshTime = now;
+    this.aiLoading = true;
+    this.aiMessage = '';
+
+    // 尝试后端，AI 模型推理需要较长时间，总体最长等 3 分钟
+    try {
+      const profile: HealthProfile = await Promise.race<HealthProfile>([
+        ApiClient.getProfile(ApiClient.currentUserId),
+        new Promise<HealthProfile>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+      ]);
+      this.aiPlan = await Promise.race<AiMealPlan>([
+        ApiClient.aiRecommendMeals(profile, this.aiRefreshIndex),
+        new Promise<AiMealPlan>((_, reject) => setTimeout(() => reject(new Error('timeout')), 180000))
+      ]);
+      this.aiRefreshIndex++;
+      this.isConnected = true;
+    } catch (error) {
+      this.isConnected = false;
+      this.aiMessage = ApiClient.lastError.length > 0 ? ApiClient.lastError : 'AI 推荐加载失败';
+    } finally {
+      this.aiLoading = false;
+    }
+  }
+
 
   onSortChanged() {
     this.currentPage = 1;
@@ -66,7 +114,8 @@ export struct RecipeHubPage {
     Scroll() {
       Column({ space: 16 }) {
         this.hero()
-        this.recommendSection()
+        this.offlineRecommendSection()
+        this.aiRecommendSection()
         this.searchSection()
         this.sortSection()
         this.recipeListSection()
@@ -92,11 +141,12 @@ export struct RecipeHubPage {
     .width('100%')
   }
 
+  // 离线备用方案卡片 —— 永远显示
   @Builder
-  recommendSection() {
+  offlineRecommendSection() {
     Column({ space: 12 }) {
       Row() {
-        Text('今日 AI 餐单')
+        Text('离线备用方案')
           .fontSize(19)
           .fontWeight(FontWeight.Bold)
           .fontColor('#071725')
@@ -107,33 +157,209 @@ export struct RecipeHubPage {
           .fontColor('#FFF6D5')
           .backgroundColor('#071725')
           .borderRadius(17)
-          .onClick(async () => {
-            await this.load();
+          .onClick(() => {
+            this.rotateOffline();
           })
       }
       .width('100%')
 
-      this.mealCard('早餐', this.plan.breakfast[0], '#F8DD77')
-      this.mealCard('午餐', this.plan.lunch[0], '#A8D9A1')
-      this.mealCard('晚餐', this.plan.dinner[0], '#93BFE8')
-      this.mealCard('加餐', this.plan.snack[0], '#E7B4C8')
+      ForEach(this.offlinePlan.breakfast, (recipe: AiRecipe) => {
+        this.mealCard('早餐', recipe, '#F8DD77')
+      }, (recipe: AiRecipe) => 'offline-breakfast-' + recipe.name)
+      ForEach(this.offlinePlan.lunch, (recipe: AiRecipe) => {
+        this.mealCard('午餐', recipe, '#A8D9A1')
+      }, (recipe: AiRecipe) => 'offline-lunch-' + recipe.name)
+      ForEach(this.offlinePlan.dinner, (recipe: AiRecipe) => {
+        this.mealCard('晚餐', recipe, '#93BFE8')
+      }, (recipe: AiRecipe) => 'offline-dinner-' + recipe.name)
+      ForEach(this.offlinePlan.snack, (recipe: AiRecipe) => {
+        this.mealCard('加餐', recipe, '#E7B4C8')
+      }, (recipe: AiRecipe) => 'offline-snack-' + recipe.name)
 
-      Text(`预估摄入 ${this.plan.estimatedIntake.dailyCalories} 千卡 · ${this.plan.estimatedIntake.macroRatio}`)
+        Text(`预估摄入 ${this.offlinePlan.estimatedIntake.dailyCalories} 千卡 · ${this.offlinePlan.estimatedIntake.macroRatio}`)
         .fontSize(13)
         .fontColor('#405146')
         .padding(12)
         .backgroundColor('#EAF3E4')
         .borderRadius(10)
         .width('100%')
+
+      if (this.offlinePlan.notes && this.offlinePlan.notes.length > 0) {
+        Column({ space: 8 }) {
+          Row({ space: 6 }) {
+            Image($r('app.media.ai_tip_icon'))
+              .width(18)
+              .height(18)
+              .objectFit(ImageFit.Contain)
+            Text('AI建议')
+              .fontSize(14)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#071725')
+          }
+          .justifyContent(FlexAlign.Center)
+          .width('100%')
+
+          Column({ space: 4 }) {
+            ForEach(this.offlinePlan.notes, (note: string) => {
+              Text(note)
+                .fontSize(13)
+                .fontColor('#071725')
+            })
+          }
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
+        }
+        .width('100%')
+        .padding(10)
+        .backgroundColor('#F8FAF5')
+        .borderRadius(12)
+        .alignItems(HorizontalAlign.Start)
+      }
     }
     .padding(16)
-    .backgroundColor('#FFFFFF')
+    .backgroundColor('#FFF9EE')
     .borderRadius(18)
+    .border({ width: 1, color: '#F0D070' })
+    .width('100%')
+  }
+
+  // AI 实时推荐卡片 —— 始终显示，未连接时展示占位提示
+  @Builder
+  aiRecommendSection() {
+    Column({ space: 12 }) {
+      Row() {
+        Text('AI 实时推荐')
+          .fontSize(19)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#071725')
+          .layoutWeight(1)
+
+        if (this.isConnected) {
+          Text('已连接')
+            .fontSize(11)
+            .fontColor('#156B45')
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .backgroundColor('#EAF3E4')
+            .borderRadius(8)
+            .margin({ right: 8 })
+        } else {
+          Text('未连接')
+            .fontSize(11)
+            .fontColor('#B85C5C')
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .backgroundColor('#FDEFEF')
+            .borderRadius(8)
+            .margin({ right: 8 })
+        }
+
+        Button(this.aiLoading ? '生成中...' : '换一换')
+          .height(34)
+          .fontSize(13)
+          .fontColor('#FFF6D5')
+          .backgroundColor('#071725')
+          .borderRadius(17)
+          .enabled(!this.aiLoading)
+          .onClick(async () => {
+            await this.loadAiPlan();
+          })
+      }
+      .width('100%')
+
+      if (this.aiLoading) {
+        LoadingProgress()
+          .width(32)
+          .height(32)
+          .color('#156B45')
+          .margin({ top: 8, bottom: 8 })
+      }
+
+      if (this.aiMessage.length > 0) {
+        Text(this.aiMessage)
+          .fontSize(13)
+          .fontColor('#8B5E22')
+          .padding(10)
+          .backgroundColor('#FFF4D5')
+          .borderRadius(10)
+          .width('100%')
+      }
+
+      if (this.isConnected) {
+        ForEach(this.aiPlan.breakfast, (recipe: AiRecipe) => {
+          this.mealCard('早餐', recipe, '#F8DD77')
+        }, (recipe: AiRecipe) => 'ai-breakfast-' + recipe.name)
+        ForEach(this.aiPlan.lunch, (recipe: AiRecipe) => {
+          this.mealCard('午餐', recipe, '#A8D9A1')
+        }, (recipe: AiRecipe) => 'ai-lunch-' + recipe.name)
+        ForEach(this.aiPlan.dinner, (recipe: AiRecipe) => {
+          this.mealCard('晚餐', recipe, '#93BFE8')
+        }, (recipe: AiRecipe) => 'ai-dinner-' + recipe.name)
+        ForEach(this.aiPlan.snack, (recipe: AiRecipe) => {
+          this.mealCard('加餐', recipe, '#E7B4C8')
+        }, (recipe: AiRecipe) => 'ai-snack-' + recipe.name)
+
+        Text(`预估摄入 ${this.aiPlan.estimatedIntake.dailyCalories} 千卡 · ${this.aiPlan.estimatedIntake.macroRatio}`)
+          .fontSize(13)
+          .fontColor('#405146')
+          .padding(12)
+          .backgroundColor('#EAF3E4')
+          .borderRadius(10)
+          .width('100%')
+
+        if (this.aiPlan.notes && this.aiPlan.notes.length > 0) {
+          Column({ space: 8 }) {
+            Row({ space: 6 }) {
+              Image($r('app.media.ai_tip_icon'))
+                .width(18)
+                .height(18)
+                .objectFit(ImageFit.Contain)
+              Text('AI建议')
+                .fontSize(14)
+                .fontWeight(FontWeight.Bold)
+                .fontColor('#071725')
+            }
+            .justifyContent(FlexAlign.Center)
+            .width('100%')
+
+            Column({ space: 4 }) {
+              ForEach(this.aiPlan.notes, (note: string) => {
+                Text(note)
+                  .fontSize(13)
+                  .fontColor('#071725')
+              })
+            }
+            .alignItems(HorizontalAlign.Start)
+            .width('100%')
+          }
+          .width('100%')
+          .padding(10)
+          .backgroundColor('#F8FAF5')
+          .borderRadius(12)
+          .alignItems(HorizontalAlign.Start)
+        }
+      } else {
+        Column({ space: 8 }) {
+          Text('AI 推荐未连接')
+            .fontSize(15)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#657064')
+          Text('请检查网络或后端服务，点击「换一换」重试')
+            .fontSize(13)
+            .fontColor('#657064')
+        }
+        .padding(24)
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+      }
+    }
+    .padding(16)
+    .backgroundColor('#F4FCF6')
+    .borderRadius(18)
+    .border({ width: 1, color: '#8FCC9F' })
     .width('100%')
   }
 
   @Builder
-  mealCard(title: string, recipe: Recipe, color: string) {
+  mealCard(title: string, recipe: AiRecipe, color: string) {
     Row({ space: 12 }) {
       Text(title)
         .fontSize(14)
@@ -161,9 +387,6 @@ export struct RecipeHubPage {
     .padding(10)
     .backgroundColor('#F8FAF5')
     .borderRadius(12)
-    .onClick(async () => {
-      await this.openRecipe(recipe);
-    })
   }
 
   @Builder

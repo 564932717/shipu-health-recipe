@@ -20,8 +20,9 @@ public class ReportController {
     @GetMapping("/week")
     public ApiResponse<WeeklyReport> week(
             @RequestParam String userId,
-            @RequestParam(defaultValue = "1800") int targetCalories
+            @RequestParam(defaultValue = "1800") int targetCalories,
+            @RequestParam(required = false) String date
     ) {
-        return ApiResponse.ok(reportService.weeklyReport(userId, targetCalories));
+        return ApiResponse.ok(reportService.weeklyReport(userId, targetCalories, date));
     }
 }

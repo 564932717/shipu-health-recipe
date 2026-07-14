@@ -10,6 +10,7 @@ import com.xd.healthrecipe.domain.Recipe;
 import com.xd.healthrecipe.repository.RecipeRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -97,9 +98,9 @@ public class RecommendationService {
     }
 
     private List<Recipe> filterTaboos(List<Recipe> recipes, HealthProfile profile) {
-        return recipes.stream()
+        return new ArrayList<>(recipes.stream()
                 .filter(recipe -> !recipe.containsAny(profile.taboos()))
-                .toList();
+                .toList());
     }
 
     private List<Recipe> pickRandom(List<Recipe> list, int count) {

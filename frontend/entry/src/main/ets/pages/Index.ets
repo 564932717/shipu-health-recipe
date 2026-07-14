@@ -1,9 +1,9 @@
 import { LoginRequest, RegisterRequest, UserSession } from '../common/Models';
 import { ApiClient } from '../services/ApiClient';
 import { DashboardPage } from './DashboardPage';
-import { InsightsPage } from './InsightsPage';
 import { ProfilePage } from './ProfilePage';
 import { RecipeHubPage } from './RecipeHubPage';
+import { ReportPage } from './ReportPage';
 import { UserCenterPage } from './UserCenterPage';
 
 @Entry
@@ -386,7 +386,7 @@ struct Index {
       .tabBar('食谱')
 
       TabContent() {
-        InsightsPage()
+        ReportPage()
       }
       .tabBar('统计')
 

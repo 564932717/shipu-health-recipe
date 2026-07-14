@@ -133,6 +133,7 @@ export interface DietRecordRequest {
   proteinGram: number;
   fatGram: number;
   carbohydrateGram: number;
+  eatenAt?: string;
 }
 
 export interface NutritionSummary {
@@ -189,4 +190,48 @@ export interface WeeklyReport {
 export interface UpdateProfileRequest {
   userId: string;
   displayName: string;
+}
+
+// AI 请求体
+export interface AiRecommendMealsRequest {
+  profile: HealthProfile;
+  refreshIndex: number;
+}
+
+export interface AiWeeklySuggestionsRequest {
+  userId: string;
+  targetCalories: number;
+  date: string;
+}
+
+export interface AiDailyAnalysisRequest {
+  userId: string;
+  date: string;
+  targetCalories: number;
+  targetProtein: number;
+  targetFat: number;
+  targetCarbs: number;
+}
+
+// AI 生成的食谱（不依赖数据库，由大模型实时生成）
+export interface AiRecipe {
+  name: string;
+  calories: number;
+  proteinGram: number;
+  fatGram: number;
+  carbohydrateGram: number;
+  ingredients: string[];
+  steps: string[];
+  difficulty: string;
+  cookTime: string;
+}
+
+// AI 生成的三餐方案
+export interface AiMealPlan {
+  breakfast: AiRecipe[];
+  lunch: AiRecipe[];
+  dinner: AiRecipe[];
+  snack: AiRecipe[];
+  estimatedIntake: NutritionTarget;
+  notes: string[];
 }
